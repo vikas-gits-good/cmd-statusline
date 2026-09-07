@@ -159,6 +159,32 @@ export function shortModelName(full: string): string {
 	return s.trim();
 }
 
+// Normalize `git rev-parse --abbrev-ref HEAD` output. In detached HEAD state
+// git returns the literal string "HEAD", which is not a branch name — treat it
+// as empty so the status line omits a bogus branch.
+export function normalizeBranch(raw: string): string {
+	const b = raw.trim();
+	return b === 'HEAD' ? '' : b;
+}
+
+// Choose the session name to display. The disk value (read fresh from the
+// session meta/transcript) wins over a cached event value, because a manual
+// /rename writes to disk but does not emit a `session_titled` event. Returns
+// '' when neither is available.
+export function pickSessionName(diskName: string, eventName: string): string {
+	const d = diskName.trim();
+	if (d) return d;
+	return eventName.trim();
+}
+
+// Classify a `config_setting_changed` event payload into the piece of status
+// state it affects. Returns null for settings the status line doesn't render.
+export function classifyConfigChange(setting: string, value: unknown): 'model' | 'effort' | null {
+	if (setting === 'model' && typeof value === 'string' && value) return 'model';
+	if (setting === 'effort' && typeof value === 'string' && value) return 'effort';
+	return null;
+}
+
 // Resolve a context window for a model id, whether it arrives as a full
 // "provider/model" slug, an already-short name, or a short name that needs a
 // provider prefix (e.g. "deepseek-v4-pro" → "deepseek/deepseek-v4-pro").

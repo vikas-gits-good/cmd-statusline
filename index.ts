@@ -2,7 +2,14 @@
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type { ModApi } from '@commandcode/harness';
-import { resolveContextWindow, buildStatusLine, type Usage } from './lib';
+import {
+	resolveContextWindow,
+	buildStatusLine,
+	normalizeBranch,
+	pickSessionName,
+	classifyConfigChange,
+	type Usage,
+} from './lib';
 import { fetchUsage } from './usage';
 
 const USAGE_FETCH_THROTTLE_MS = 30_000;
@@ -79,6 +86,22 @@ export default function (cmd: ModApi): void {
 			}
 		}
 		return null;
+	}
+
+	// Read the session title fresh from disk so a manual /rename (which writes
+	// to disk but does not emit session_titled) is picked up on the next render.
+	async function readTitleFromDisk(): Promise<string> {
+		try {
+			const fs = await import('node:fs/promises');
+			const files = await locateSessionFiles();
+			if (!files) return '';
+			const meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {
+				title?: string;
+			};
+			return meta.title ?? '';
+		} catch {
+			return '';
+		}
 	}
 
 	// Single source of truth for reloads: read title/model/effort/context from disk.
@@ -165,18 +188,23 @@ export default function (cmd: ModApi): void {
 				args: ['rev-parse', '--abbrev-ref', 'HEAD'],
 				cwd: cmd.cwd,
 			});
-			branch = b.stdout.trim();
+			branch = normalizeBranch(b.stdout);
 			const s = await cmd.exec({ command: 'git', args: ['status', '--porcelain'], cwd: cmd.cwd });
 			dirty = s.stdout.trim().length > 0;
 		} catch {
 			// not a git repo
 		}
 
+		// Re-read the title so a manual /rename (disk-only, no event) wins over
+		// the cached session_titled value.
+		const diskTitle = await readTitleFromDisk();
+		const resolvedSessionName = pickSessionName(diskTitle, sessionName);
+
 		const line = buildStatusLine({
 			cwd,
 			branch,
 			dirty,
-			sessionName,
+			sessionName: resolvedSessionName,
 			model,
 			effort,
 			currentTokens,
@@ -240,12 +268,14 @@ export default function (cmd: ModApi): void {
 	});
 
 	cmd.on('config_setting_changed', (e) => {
-		if (
-			e.type === 'config_setting_changed' &&
-			e.setting === 'effort' &&
-			typeof e.value === 'string'
-		) {
-			effort = e.value;
+		if (e.type !== 'config_setting_changed') return;
+		const kind = classifyConfigChange(e.setting, e.value);
+		if (kind === 'model') {
+			model = e.value as string;
+			contextLimit = resolveContextWindow(model) ?? 0;
+			enqueueRender();
+		} else if (kind === 'effort') {
+			effort = e.value as string;
 			enqueueRender();
 		}
 	});

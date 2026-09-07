@@ -1,4 +1,4 @@
-name: test
+name: cross-platform-cmd-statusline-install
 
 on:
   push:

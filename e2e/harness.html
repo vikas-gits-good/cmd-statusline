@@ -9,7 +9,7 @@
 <script type="module">
 // Harness renders the status line as semantic DOM with data-testid, so
 // Playwright selectors target stable segments instead of raw ANSI strings.
-import {buildStatusLine, computeStatus, resolveContextWindow, CONTEXT_WINDOWS, PLAN_CREDITS} from '/e2e/lib.browser.js';
+import {buildStatusLine, computeStatus, resolveContextWindow, CONTEXT_WINDOWS, PLAN_CREDITS, pickSessionName, classifyConfigChange, normalizeBranch} from '/e2e/lib.browser.js';
 
 function renderStatus(scenario) {
 	// Scenario keys are human intent: usg/wkl/tot are target percentages,
@@ -87,6 +87,9 @@ function renderStatus(scenario) {
 window.renderStatus = renderStatus;
 window.resolveContextWindow = resolveContextWindow;
 window.CONTEXT_WINDOWS = CONTEXT_WINDOWS;
+window.pickSessionName = pickSessionName;
+window.classifyConfigChange = classifyConfigChange;
+window.normalizeBranch = normalizeBranch;
 </script>
 </body>
 </html>

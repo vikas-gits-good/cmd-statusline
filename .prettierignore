@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .private/
+coverage/
+coverage-final.json
+test-results/
+playwright-report/
 e2e/lib.browser.js
 e2e/context-windows.json
 e2e/models.list.json

@@ -177,35 +177,68 @@ export default function (cmd: ModApi): void {
 		}
 	}
 
-	async function readSessionTitleFromDisk(): Promise<string | null> {
+	// Locate the current session's transcript + meta files on disk.
+	async function locateSessionFiles(): Promise<{metaPath: string; transcriptPath: string} | null> {
+		const fs = await import('node:fs/promises');
+		const os = await import('node:os');
+		const path = await import('node:path');
+
+		// COMMANDCODE_SCRATCHPAD = .../<cwd-slug>/<session-id>/scratchpad
+		const scratch = process.env.COMMANDCODE_SCRATCHPAD;
+		if (!scratch) return null;
+		const parts = scratch.split('/').filter(Boolean);
+		const scratchIdx = parts.lastIndexOf('scratchpad');
+		const sessionId = scratchIdx >= 1 ? parts[scratchIdx - 1] : null;
+		if (!sessionId) return null;
+
+		const projects = path.join(os.homedir(), '.commandcode', 'projects');
+		const dirs = await fs.readdir(projects);
+		for (const d of dirs) {
+			const metaPath = path.join(projects, d, `${sessionId}.meta.json`);
+			try {
+				await fs.access(metaPath);
+				return {metaPath, transcriptPath: path.join(projects, d, `${sessionId}.jsonl`)};
+			} catch {
+				// keep scanning other project dirs
+			}
+		}
+		return null;
+	}
+
+	// Single source of truth for reloads: read title/model/effort/context from disk.
+	async function refreshFromDisk(): Promise<void> {
 		try {
+			const files = await locateSessionFiles();
+			if (!files) return;
 			const fs = await import('node:fs/promises');
-			const os = await import('node:os');
-			const path = await import('node:path');
 
-			// COMMANDCODE_SCRATCHPAD = .../<cwd-slug>/<session-id>/scratchpad
-			const scratch = process.env.COMMANDCODE_SCRATCHPAD;
-			if (!scratch) return null;
-			const parts = scratch.split('/').filter(Boolean);
-			const scratchIdx = parts.lastIndexOf('scratchpad');
-			const sessionId = scratchIdx >= 1 ? parts[scratchIdx - 1] : null;
-			if (!sessionId) return null;
+			const meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {title?: string; model?: string};
+			if (meta.title) sessionName = meta.title;
+			if (meta.model) {
+				model = meta.model;
+				contextLimit = CONTEXT_WINDOWS[model] ?? contextLimit;
+			}
 
-			const projects = path.join(os.homedir(), '.commandcode', 'projects');
-			const dirs = await fs.readdir(projects);
-			for (const d of dirs) {
-				const metaPath = path.join(projects, d, `${sessionId}.meta.json`);
+			// Scan transcript backwards for the latest assistant entry with effort/usage.
+			const raw = await fs.readFile(files.transcriptPath, 'utf8');
+			const lines = raw.split('\n');
+			for (let i = lines.length - 1; i >= 0; i--) {
+				const line = lines[i].trim();
+				if (!line) continue;
+				let entry: {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
 				try {
-					const raw = await fs.readFile(metaPath, 'utf8');
-					const meta = JSON.parse(raw) as {title?: string};
-					if (meta.title) return meta.title;
+					entry = JSON.parse(line);
 				} catch {
-					// keep scanning other project dirs
+					continue;
+				}
+				if (entry.effort) effort = entry.effort;
+				if (entry.usage) {
+					currentTokens = (entry.usage.inputTokens ?? 0) + (entry.usage.outputTokens ?? 0);
+					break;
 				}
 			}
-			return null;
 		} catch {
-			return null;
+			// keep whatever is in memory
 		}
 	}
 
@@ -279,11 +312,12 @@ export default function (cmd: ModApi): void {
 	});
 
 	cmd.hooks({
-		onSessionStart: async () => {
-			const fromDisk = await readSessionTitleFromDisk();
-			if (fromDisk) sessionName = fromDisk;
-			void refreshUsage();
-			void render();
+		onSessionStart: () => {
+			void (async () => {
+				await refreshFromDisk();
+				await refreshUsage();
+				await render();
+			})();
 		},
 		onSessionEnd: () => {
 			cmd.ui.setStatus(null);
@@ -292,9 +326,8 @@ export default function (cmd: ModApi): void {
 
 	// Seed immediately too, in case the session-start hook has already fired.
 	void (async () => {
-		const fromDisk = await readSessionTitleFromDisk();
-		if (fromDisk) sessionName = fromDisk;
-		void refreshUsage();
-		void render();
+		await refreshFromDisk();
+		await refreshUsage();
+		await render();
 	})();
 }

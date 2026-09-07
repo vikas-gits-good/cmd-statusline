@@ -3,6 +3,7 @@
 	"version": "1.0.0",
 	"description": "Command Code status bar mod — cwd, branch, session name, model, effort, and usage metrics with color coding.",
 	"license": "MIT",
+	"type": "module",
 	"commandcode": {
 		"mods": [
 			"./index.ts"

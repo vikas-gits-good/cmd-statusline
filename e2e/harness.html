@@ -9,7 +9,7 @@
 <script type="module">
 // Harness renders the status line as semantic DOM with data-testid, so
 // Playwright selectors target stable segments instead of raw ANSI strings.
-import {buildStatusLine, computeStatus} from '/e2e/lib.browser.js';
+import {buildStatusLine, computeStatus, resolveContextWindow, CONTEXT_WINDOWS, PLAN_CREDITS} from '/e2e/lib.browser.js';
 
 function renderStatus(scenario) {
 	// Scenario keys are human intent: usg/wkl/tot are target percentages,
@@ -20,6 +20,11 @@ function renderStatus(scenario) {
 	const wkl = scenario.wkl ?? 0;
 	const tot = scenario.tot ?? 0;
 	const remaining = scenario.remaining ?? 0;
+	const planId = scenario.planId ?? 'individual-pro';
+
+	// cyclePct denominator = max(planCredits, monthlyCredits) + purchased + free.
+	const planCredits = PLAN_CREDITS[planId] ?? remaining;
+	const pool = Math.max(planCredits, remaining);
 
 	const state = {
 		cwd: scenario.cwd ?? 'repo',
@@ -32,17 +37,16 @@ function renderStatus(scenario) {
 		contextLimit: scenario.contextLimit ?? 1_000_000,
 		usage: hasUsage
 			? {
-				planId: scenario.planId ?? 'individual-pro',
+				planId,
 				fiveHourUsed: usg,
 				fiveHourCap: 100,
 				weeklyUsed: wkl,
 				weeklyCap: 100,
-				// monthlyCredits doubles as the remaining-dollar pool for crdt
-				// AND the denominator for cycle %, so derive totalSpent from tot.
 				monthlyCredits: remaining,
 				purchasedCredits: 0,
 				freeCredits: 0,
-				totalSpent: (tot / 100) * remaining,
+				// totalSpent such that totalSpent/pool = tot/100 exactly.
+				totalSpent: (tot / 100) * pool,
 			}
 			: null,
 	};
@@ -59,10 +63,10 @@ function renderStatus(scenario) {
 		['session-name', seg.sessionName],
 		['model', seg.model],
 		['effort', seg.effort],
-		['cntx', String(seg.cntx)],
+		['cntx', seg.cntx === null ? '--' : String(seg.cntx)],
 	];
 	if (seg.usge !== null) entries.push(['usge', String(seg.usge)]);
-	if (seg.skly !== null) entries.push(['wkly', String(seg.skly)]);
+	if (seg.wkly !== null) entries.push(['wkly', String(seg.wkly)]);
 	if (seg.totl !== null) entries.push(['totl', String(seg.totl)]);
 	if (seg.crdt !== null) entries.push(['crdt', seg.crdt]);
 
@@ -81,6 +85,8 @@ function renderStatus(scenario) {
 }
 
 window.renderStatus = renderStatus;
+window.resolveContextWindow = resolveContextWindow;
+window.CONTEXT_WINDOWS = CONTEXT_WINDOWS;
 </script>
 </body>
 </html>

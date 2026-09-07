@@ -11,7 +11,7 @@ async function render(page, scenario) {
 // currentTokens/contextLimit drive cntx. 1M context, so 130% cap needs 1.3M tokens.
 test('renders a complete status line with all fields', async ({page}) => {
 	await render(page, {
-		cwd: 'stockup-be',
+		cwd: 'my-project',
 		branch: 'main',
 		dirty: false,
 		sessionName: 'System Design Plan',
@@ -26,7 +26,7 @@ test('renders a complete status line with all fields', async ({page}) => {
 		planId: 'individual-pro-v1',
 	});
 
-	await expect(page.getByTestId('cwd')).toHaveText('stockup-be');
+	await expect(page.getByTestId('cwd')).toHaveText('my-project');
 	await expect(page.getByTestId('branch')).toHaveText('main');
 	await expect(page.getByTestId('dirty')).toHaveText('clean');
 	await expect(page.getByTestId('session-name')).toHaveText('System Design Plan');
@@ -40,7 +40,7 @@ test('renders a complete status line with all fields', async ({page}) => {
 
 test('shows no session name for a new session', async ({page}) => {
 	await render(page, {
-		cwd: 'stockup-be',
+		cwd: 'my-project',
 		branch: 'main',
 		dirty: false,
 		sessionName: '',

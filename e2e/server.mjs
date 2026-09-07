@@ -23,4 +23,4 @@ const server = createServer(async (req, res) => {
 	}
 });
 
-server.listen(4321, () => console.log('e2e server on 4321'));
+server.listen(4321, '127.0.0.1', () => console.log('e2e server on 127.0.0.1:4321'));

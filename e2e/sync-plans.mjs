@@ -20,7 +20,9 @@ function resolveCliBundle() {
 
 function extractMap(src, varName) {
 	// Zn={"individual-go":10,...}  er={...}
-	const re = new RegExp(varName + '=\\{([^}]*)\\}');
+	// Anchor with a word boundary so we never match a longer identifier that
+	// merely contains `varName` (e.g. `counterZn={...}` or `offer={...}`).
+	const re = new RegExp('\\b' + varName + '=\\{([^}]*)\\}');
 	const m = src.match(re);
 	if (!m) throw new Error(`could not find ${varName} in CLI bundle`);
 	const raw = `{${m[1]}}`;
@@ -32,6 +34,16 @@ const src = readFileSync(cliPath, 'utf8');
 
 const credits = extractMap(src, 'Zn');
 const displayNames = extractMap(src, 'er');
+
+// Sanity-check: every credit key must resolve to a positive number, and the
+// display-name map must be non-empty. A wrong regex match would fail here.
+const entries = Object.entries(credits);
+if (entries.length < 2) throw new Error('sync-plans: extracted too few plans');
+for (const [id, amount] of entries) {
+	if (typeof amount !== 'number' || amount <= 0) {
+		throw new Error(`sync-plans: invalid credits for ${id}: ${amount}`);
+	}
+}
 
 const plans = Object.keys(credits).sort().map(id => ({
 	id,

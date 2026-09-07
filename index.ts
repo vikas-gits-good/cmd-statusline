@@ -2,26 +2,13 @@
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type {ModApi} from '@commandcode/harness';
-import {
-	GREEN,
-	YELLOW,
-	ORANGE,
-	RED,
-	RESET,
-	PLAN_CREDITS,
-	pct,
-	colorUsage,
-	colorCredits,
-	shortModelName,
-	resolveContextWindow,
-	cyclePct,
-	buildStatusLine,
-	type Usage,
-} from './lib';
-
-const DIM = '\x1b[2m';
+import {resolveContextWindow, buildStatusLine, type Usage} from './lib';
 
 const API_BASE = 'https://api.commandcode.ai';
+const CLIENT_VERSION = '1.50.0';
+const USAGE_FETCH_THROTTLE_MS = 30_000;
+const USAGE_FETCH_TIMEOUT_MS = 10_000;
+const RENDER_INTERVAL_MS = 30_000;
 
 async function readAuthKey(): Promise<string | null> {
 	const env = process.env.COMMAND_CODE_API_KEY?.trim();
@@ -49,30 +36,30 @@ async function fetchUsage(): Promise<Usage | null> {
 		'Content-Type': 'application/json',
 		'User-Agent': 'cli',
 		'x-cli-environment': 'cli',
-		'x-command-code-version': '1.50.0',
+		'x-command-code-version': CLIENT_VERSION,
 	};
 
-	const credits = await fetch(`${API_BASE}/alpha/billing/credits`, {headers});
-	const creditsJson = (await credits.json()) as {
-		credits: {
-			monthlyCredits?: number;
-			purchasedCredits?: number;
-			freeCredits?: number;
-		};
-		windowLimits: {
-			fiveHour?: {used?: number; cap?: number};
-			weekly?: {used?: number; cap?: number};
-		};
+	const fetchJson = async (url: string) => {
+		const res = await fetch(url, {headers, signal: AbortSignal.timeout(USAGE_FETCH_TIMEOUT_MS)});
+		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+		return res.json();
 	};
 
-	const sub = await fetch(`${API_BASE}/alpha/billing/subscriptions`, {headers});
-	const subJson = (await sub.json()) as {data?: {planId?: string; currentPeriodStart?: string}};
+	const [creditsJson, subJson] = await Promise.all([
+		fetchJson(`${API_BASE}/alpha/billing/credits`),
+		fetchJson(`${API_BASE}/alpha/billing/subscriptions`),
+	]) as [
+		{
+			credits: {monthlyCredits?: number; purchasedCredits?: number; freeCredits?: number};
+			windowLimits: {fiveHour?: {used?: number; cap?: number}; weekly?: {used?: number; cap?: number}};
+		},
+		{data?: {planId?: string; currentPeriodStart?: string}},
+	];
+
 	const planId = subJson.data?.planId ?? '';
 	const since = subJson.data?.currentPeriodStart ?? undefined;
-
 	const summaryPath = `${API_BASE}/alpha/usage/summary${since ? `?since=${encodeURIComponent(since)}` : ''}`;
-	const summary = await fetch(summaryPath, {headers});
-	const summaryJson = (await summary.json()) as {totalCost?: number};
+	const summaryJson = (await fetchJson(summaryPath)) as {totalCost?: number};
 
 	return {
 		planId,
@@ -92,19 +79,32 @@ export default function (cmd: ModApi): void {
 	let effort = '';
 	let sessionName = '';
 	let currentTokens = 0;
+	// 0 = unknown context window. Never retain a stale previous model's window.
 	let contextLimit = 0;
 
 	let usage: Usage | null = null;
 	let lastUsageFetch = 0;
+	let refreshing = false;
+	let renderChain: Promise<void> = Promise.resolve();
+	const warn = (msg: string) => {
+		try {
+			cmd.ui.notify(`[cmd-statusline] ${msg}`);
+		} catch {
+			// notification is best-effort; never crash the mod
+		}
+	};
 
 	async function refreshUsage(): Promise<void> {
 		const now = Date.now();
-		if (now - lastUsageFetch < 30_000) return;
+		if (now - lastUsageFetch < USAGE_FETCH_THROTTLE_MS) return;
 		lastUsageFetch = now;
 		try {
 			usage = await fetchUsage();
-		} catch {
-			// keep last known
+		} catch (err) {
+			// Distinguish auth failure from transient network errors, log one line,
+			// never include the key.
+			const msg = err instanceof Error && /401/.test(err.message) ? 'usage API auth failed' : 'usage API unreachable';
+			warn(msg);
 		}
 	}
 
@@ -117,13 +117,18 @@ export default function (cmd: ModApi): void {
 		// COMMANDCODE_SCRATCHPAD = .../<cwd-slug>/<session-id>/scratchpad
 		const scratch = process.env.COMMANDCODE_SCRATCHPAD;
 		if (!scratch) return null;
-		const parts = scratch.split('/').filter(Boolean);
+		const parts = scratch.split(path.sep).filter(Boolean);
 		const scratchIdx = parts.lastIndexOf('scratchpad');
 		const sessionId = scratchIdx >= 1 ? parts[scratchIdx - 1] : null;
 		if (!sessionId) return null;
 
 		const projects = path.join(os.homedir(), '.commandcode', 'projects');
-		const dirs = await fs.readdir(projects);
+		let dirs: string[];
+		try {
+			dirs = await fs.readdir(projects);
+		} catch {
+			return null;
+		}
 		for (const d of dirs) {
 			const metaPath = path.join(projects, d, `${sessionId}.meta.json`);
 			try {
@@ -151,7 +156,7 @@ export default function (cmd: ModApi): void {
 			};
 			if (cfg.model) {
 				model = cfg.model;
-				contextLimit = resolveContextWindow(model) ?? contextLimit;
+				contextLimit = resolveContextWindow(model) ?? 0;
 				if (cfg.reasoningEffort?.[model]) effort = cfg.reasoningEffort[model];
 			}
 		} catch {
@@ -161,15 +166,25 @@ export default function (cmd: ModApi): void {
 		const files = await locateSessionFiles();
 		if (!files) return;
 
-		const meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {title?: string; model?: string};
+		let meta: {title?: string; model?: string};
+		try {
+			meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {title?: string; model?: string};
+		} catch {
+			return;
+		}
 		if (meta.title) sessionName = meta.title;
 		if (meta.model) {
 			model = meta.model;
-			contextLimit = resolveContextWindow(model) ?? contextLimit;
+			contextLimit = resolveContextWindow(model) ?? 0;
 		}
 
 		// Scan transcript backwards for the latest assistant entry with model/effort/usage.
-		const raw = await fs.readFile(files.transcriptPath, 'utf8');
+		let raw: string;
+		try {
+			raw = await fs.readFile(files.transcriptPath, 'utf8');
+		} catch {
+			return;
+		}
 		const lines = raw.split('\n');
 		for (let i = lines.length - 1; i >= 0; i--) {
 			const line = lines[i].trim();
@@ -180,7 +195,10 @@ export default function (cmd: ModApi): void {
 			} catch {
 				continue;
 			}
-			if (entry.model) model = entry.model;
+			if (entry.model) {
+				model = entry.model;
+				contextLimit = resolveContextWindow(model) ?? 0;
+			}
 			if (entry.effort) effort = entry.effort;
 			if (entry.usage) {
 				currentTokens = (entry.usage.inputTokens ?? 0) + (entry.usage.outputTokens ?? 0);
@@ -189,23 +207,8 @@ export default function (cmd: ModApi): void {
 		}
 	}
 
-	let refreshing = false;
-
-	// Single entry point that gathers everything, then renders once.
-	async function fullRefresh(): Promise<void> {
-		if (refreshing) return;
-		refreshing = true;
-		try {
-			await refreshFromDisk();
-			await refreshUsage();
-			await render();
-		} finally {
-			refreshing = false;
-		}
-	}
-
 	async function render(): Promise<void> {
-		const cwd = (cmd.cwd || '').split('/').filter(Boolean).pop() || cmd.cwd || '';
+		const cwd = (cmd.cwd || '').split(/[\\/]/).filter(Boolean).pop() || cmd.cwd || '';
 
 		let branch = '';
 		let dirty = false;
@@ -233,36 +236,58 @@ export default function (cmd: ModApi): void {
 		cmd.ui.setStatus(line);
 	}
 
+	// Single-flight: every render request chains through one promise so a
+	// slower older render can never overwrite a newer one.
+	function enqueueRender(): void {
+		renderChain = renderChain.then(render).catch(() => {});
+	}
+
+	// Single entry point that gathers everything, then renders once.
+	async function fullRefresh(): Promise<void> {
+		if (refreshing) return;
+		refreshing = true;
+		try {
+			await refreshFromDisk();
+			await refreshUsage();
+			enqueueRender();
+		} finally {
+			refreshing = false;
+		}
+	}
+
 	cmd.on('model_request_start', e => {
 		if (e.type === 'model_request_start' && typeof e.model === 'string') {
 			model = e.model;
-			contextLimit = resolveContextWindow(model) ?? contextLimit;
+			contextLimit = resolveContextWindow(model) ?? 0;
 		}
 	});
 
 	cmd.on('model_request_end', e => {
 		if (e.type === 'model_request_end') {
 			const ev = e as {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
-			if (typeof ev.model === 'string') model = ev.model;
+			if (typeof ev.model === 'string') {
+				model = ev.model;
+				contextLimit = resolveContextWindow(model) ?? 0;
+			}
 			if (typeof ev.effort === 'string' && ev.effort) effort = ev.effort;
 			if (ev.usage) {
 				currentTokens = (ev.usage.inputTokens ?? 0) + (ev.usage.outputTokens ?? 0);
 			}
-			void render();
+			enqueueRender();
 		}
 	});
 
 	cmd.on('session_titled', e => {
 		if (e.type === 'session_titled' && typeof e.title === 'string') {
 			sessionName = e.title;
-			void render();
+			enqueueRender();
 		}
 	});
 
 	cmd.on('config_setting_changed', e => {
 		if (e.type === 'config_setting_changed' && e.setting === 'effort' && typeof e.value === 'string') {
 			effort = e.value;
-			void render();
+			enqueueRender();
 		}
 	});
 
@@ -280,12 +305,11 @@ export default function (cmd: ModApi): void {
 	void fullRefresh();
 
 	// Reactivity: re-render periodically so usage + git state stay fresh.
-	// Usage fetch is throttled to 30s internally; the render itself is cheap.
 	const interval = setInterval(() => {
 		void (async () => {
 			await refreshUsage();
-			await render();
+			enqueueRender();
 		})();
-	}, 30_000);
+	}, RENDER_INTERVAL_MS);
 	interval.unref?.();
 }

@@ -1,6 +1,6 @@
 // StockUp status bar mod.
 // Renders one footer segment (setStatus collapses newlines):
-//   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> ctx: N%, usg: N%, wkl: N%, tot: N%, crd: $N
+//   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, skly: N%, totl: N%, crdt: $N
 import type {ModApi} from '@commandcode/harness';
 
 const GREEN = '\x1b[32m';
@@ -297,13 +297,13 @@ export default function (cmd: ModApi): void {
 		const modelText = shortModel ? `${shortModel}, ` : '';
 		const effortText = effort ? `${effort}, ` : '';
 
-		let right = `${modelText}${effortText}ctx: ${colorUsage(ctx)}`;
+		let right = `${modelText}${effortText}cntx: ${colorUsage(ctx)}`;
 		if (usage) {
 			const usg = pct(usage.fiveHourUsed, usage.fiveHourCap);
 			const wkl = pct(usage.weeklyUsed, usage.weeklyCap);
 			const tot = cyclePct(usage);
 			const remaining = usage.monthlyCredits + usage.purchasedCredits + usage.freeCredits;
-			right += `, usg: ${colorUsage(usg)}, wkl: ${colorUsage(wkl)}, tot: ${colorUsage(tot)}, crd: ${colorCredits(remaining, usage.planId)}`;
+			right += `, usge: ${colorUsage(usg)}, skly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, usage.planId)}`;
 		}
 
 		const left = `${cwd}${branchText}${nameText}`;

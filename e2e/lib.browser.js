@@ -103,7 +103,7 @@ function buildStatusLine(s) {
     const wkl = pct(s.usage.weeklyUsed, s.usage.weeklyCap);
     const tot = cyclePct(s.usage);
     const remaining = s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits;
-    right += `, usge: ${colorUsage(usg)}, skly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, s.usage.planId)}`;
+    right += `, usge: ${colorUsage(usg)}, wkly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, s.usage.planId)}`;
   }
   return `${s.cwd}${branchText}${nameText}  ${DIM}\u2502${RESET}  ${right}`;
 }

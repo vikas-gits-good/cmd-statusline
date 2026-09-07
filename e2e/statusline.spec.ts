@@ -34,7 +34,7 @@ test('renders a complete status line with all fields', async ({page}) => {
 	await expect(page.getByTestId('effort')).toHaveText('high');
 	await expect(page.getByTestId('cntx')).toHaveText('0');
 	await expect(page.getByTestId('usge')).toHaveText('70');
-	await expect(page.getByTestId('skly')).toHaveText('69');
+	await expect(page.getByTestId('wkly')).toHaveText('69');
 	await expect(page.getByTestId('crdt')).toHaveText('11.56');
 });
 
@@ -95,7 +95,7 @@ test('caps context usage display at 100%', async ({page}) => {
 
 	await expect(page.getByTestId('cntx')).toHaveText('100');
 	await expect(page.getByTestId('usge')).toHaveText('100');
-	await expect(page.getByTestId('skly')).toHaveText('100');
+	await expect(page.getByTestId('wkly')).toHaveText('100');
 });
 
 test('colors credits red below 10% remaining', async ({page}) => {

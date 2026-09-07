@@ -1,6 +1,6 @@
 // cmd-statusline mod.
 // Renders one footer segment (setStatus collapses newlines):
-//   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, skly: N%, totl: N%, crdt: $N
+//   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type {ModApi} from '@commandcode/harness';
 import {
 	GREEN,

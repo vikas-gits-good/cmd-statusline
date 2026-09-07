@@ -242,6 +242,21 @@ export default function (cmd: ModApi): void {
 		}
 	}
 
+	let refreshing = false;
+
+	// Single entry point that gathers everything, then renders once.
+	async function fullRefresh(): Promise<void> {
+		if (refreshing) return;
+		refreshing = true;
+		try {
+			await refreshFromDisk();
+			await refreshUsage();
+			await render();
+		} finally {
+			refreshing = false;
+		}
+	}
+
 	async function render(): Promise<void> {
 		const cwd = (cmd.cwd || '').split('/').filter(Boolean).pop() || cmd.cwd || '';
 
@@ -261,8 +276,6 @@ export default function (cmd: ModApi): void {
 		const nameText = sessionName ? `, ${sessionName}` : '';
 
 		const ctx = contextLimit > 0 ? pct(currentTokens, contextLimit) : 0;
-
-		await refreshUsage();
 
 		const shortModel = shortModelName(model);
 		const modelText = shortModel ? `${shortModel}, ` : '';
@@ -317,11 +330,7 @@ export default function (cmd: ModApi): void {
 
 	cmd.hooks({
 		onSessionStart: () => {
-			void (async () => {
-				await refreshFromDisk();
-				await refreshUsage();
-				await render();
-			})();
+			void fullRefresh();
 		},
 		onSessionEnd: () => {
 			cmd.ui.setStatus(null);
@@ -329,9 +338,5 @@ export default function (cmd: ModApi): void {
 	});
 
 	// Seed immediately too, in case the session-start hook has already fired.
-	void (async () => {
-		await refreshFromDisk();
-		await refreshUsage();
-		await render();
-	})();
+	void fullRefresh();
 }

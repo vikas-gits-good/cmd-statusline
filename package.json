@@ -18,7 +18,7 @@
 	"scripts": {
 		"test": "vitest run",
 		"test:unit": "vitest run",
-		"test:e2e": "node e2e/sync-models.mjs && npm run build:e2e && playwright test",
+		"test:e2e": "node e2e/sync-models.mjs && node e2e/sync-plans.mjs && npm run build:e2e && playwright test",
 		"build:e2e": "esbuild lib.ts --bundle --format=esm --outfile=e2e/lib.browser.js"
 	},
 	"devDependencies": {

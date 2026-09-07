@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-09-07T14:43:33.256Z",
+  "plans": [
+    {
+      "id": "individual-go",
+      "name": "Go",
+      "monthlyCredits": 10
+    },
+    {
+      "id": "individual-goat",
+      "name": "GOAT",
+      "monthlyCredits": 70
+    },
+    {
+      "id": "individual-max",
+      "name": "Max",
+      "monthlyCredits": 150
+    },
+    {
+      "id": "individual-pro",
+      "name": "Pro",
+      "monthlyCredits": 30
+    },
+    {
+      "id": "individual-pro-v1",
+      "name": "Pro",
+      "monthlyCredits": 80
+    },
+    {
+      "id": "individual-provider",
+      "name": "Provider",
+      "monthlyCredits": 15
+    },
+    {
+      "id": "individual-ultra",
+      "name": "Ultra",
+      "monthlyCredits": 300
+    },
+    {
+      "id": "teams-pro",
+      "name": "Teams Pro",
+      "monthlyCredits": 40
+    }
+  ]
+}

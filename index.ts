@@ -46,7 +46,7 @@ export default function (cmd: ModApi): void {
 	let renderAbort: AbortController | undefined;
 	const warn = (msg: string) => {
 		try {
-			cmd.ui.notify(`[cmd-statusline] ${msg}`);
+			cmd.ui.notify(msg);
 		} catch {
 			// notification is best-effort; never crash the mod
 		}

@@ -147,3 +147,6 @@ test-results/
 playwright-report/
 # macOS
 .DS_Store
+
+# Private local notes/reports (never committed)
+.private/

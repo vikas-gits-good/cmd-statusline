@@ -1,24 +1,19 @@
 import {test, expect} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
 
-const MODELS = [
-	'deepseek/deepseek-v4-pro',
-	'deepseek/deepseek-v4-flash',
-	'deepseek/deepseek-v4-flash-vision-exp',
-	'deepseek/deepseek-v4-flash-fast',
-	'anthropic/claude-sonnet-5',
-	'anthropic/claude-sonnet-4-6',
-	'anthropic/claude-fable-5-1',
-	'anthropic/claude-fable-5',
-	'anthropic/claude-opus-5',
-	'anthropic/claude-opus-4-8',
-	'anthropic/claude-opus-4-7',
-];
+const list = JSON.parse(readFileSync(join(process.cwd(), 'e2e', 'models.list.json'), 'utf8')) as {
+	models: string[];
+};
 
 test.beforeEach(async ({page}) => {
 	await page.goto('http://localhost:4321/');
 });
 
-for (const model of MODELS) {
+// Every model in the synced catalog gets a render smoke test. The sync script
+// (e2e/sync-models.mjs) refreshes this list before the run, so new models
+// are covered automatically.
+for (const model of list.models) {
 	test(`renders ${model} with a non-zero context`, async ({page}) => {
 		await page.evaluate(m => {
 			window.renderStatus({

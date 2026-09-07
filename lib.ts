@@ -305,6 +305,69 @@ export function computeStatus(s: StatusState): StatusSegments {
 	};
 }
 
+// Rich, typed status input — the mod's data contract for templates and future
+// consumers. Mirrors Claude Code's StatusLineCommandInput shape for the fields
+// the ModApi can actually provide. Derived-only fields (model.display_name via
+// shortModelName, transcript_path via env) are documented as such.
+export interface StatusInput {
+	session_id: string | null;
+	session_name: string;
+	transcript_path: string | null;
+	model: {
+		id: string;
+		display_name: string;
+	};
+	workspace: {
+		current_dir: string;
+	};
+	context_window: {
+		context_window_size: number;
+		used_percentage: number | null;
+		remaining_percentage: number | null;
+	};
+	rate_limits: {
+		five_hour: { used_percentage: number; cap: number } | null;
+		weekly: { used_percentage: number; cap: number } | null;
+	};
+}
+
+export interface StatusInputExtras {
+	sessionId?: string;
+	transcriptPath?: string;
+}
+
+export function buildStatusInput(s: StatusState, extras: StatusInputExtras = {}): StatusInput {
+	const seg = computeStatus(s);
+	return {
+		session_id: extras.sessionId ?? null,
+		session_name: seg.sessionName,
+		transcript_path: extras.transcriptPath ?? null,
+		model: {
+			id: seg.model,
+			display_name: shortModelName(seg.model),
+		},
+		workspace: {
+			current_dir: seg.cwd,
+		},
+		context_window: {
+			context_window_size: s.contextLimit,
+			used_percentage: seg.cntx,
+			remaining_percentage: seg.cntxRemaining,
+		},
+		rate_limits: {
+			five_hour: s.usage
+				? {
+						used_percentage: pct(s.usage.fiveHourUsed, s.usage.fiveHourCap),
+						cap: s.usage.fiveHourCap,
+					}
+				: null,
+			weekly: s.usage
+				? { used_percentage: pct(s.usage.weeklyUsed, s.usage.weeklyCap), cap: s.usage.weeklyCap }
+				: null,
+		},
+	};
+}
+
 // Truncate a single field to `max` visible characters, appending a single
 // ellipsis so truncation is always visible and never a hard mid-word cut.
 export function ellipsize(text: string, max: number): string {

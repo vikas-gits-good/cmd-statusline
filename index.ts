@@ -1,89 +1,27 @@
-// StockUp status bar mod.
+// cmd-statusline mod.
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, skly: N%, totl: N%, crdt: $N
 import type {ModApi} from '@commandcode/harness';
+import {
+	GREEN,
+	YELLOW,
+	ORANGE,
+	RED,
+	RESET,
+	PLAN_CREDITS,
+	pct,
+	colorUsage,
+	colorCredits,
+	shortModelName,
+	resolveContextWindow,
+	cyclePct,
+	buildStatusLine,
+	type Usage,
+} from './lib';
 
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const ORANGE = '\x1b[38;5;208m';
-const RED = '\x1b[31m';
 const DIM = '\x1b[2m';
-const RESET = '\x1b[0m';
 
 const API_BASE = 'https://api.commandcode.ai';
-
-// Plan id → total monthly credits (used to color the credits figure).
-const PLAN_CREDITS: Record<string, number> = {
-	'individual-go': 10,
-	'individual-goat': 70,
-	'individual-pro': 30,
-	'individual-pro-v1': 80,
-	'individual-provider': 15,
-	'individual-max': 150,
-	'individual-ultra': 300,
-	'teams-pro': 40,
-};
-
-const CONTEXT_WINDOWS: Record<string, number> = {
-	'deepseek-v4-pro': 1_000_000,
-	'deepseek-v4-flash': 1_000_000,
-	'deepseek-v4-flash-vision-exp': 1_000_000,
-	'deepseek-v4-flash-fast': 1_000_000,
-	'claude-sonnet-5': 1_000_000,
-	'claude-sonnet-4-6': 1_000_000,
-	'claude-fable-5-1': 1_000_000,
-	'claude-fable-5': 1_000_000,
-	'claude-opus-5': 1_000_000,
-	'claude-opus-4-8': 1_000_000,
-	'claude-opus-4-7': 1_000_000,
-};
-
-interface Usage {
-	planId: string;
-	fiveHourUsed: number;
-	fiveHourCap: number;
-	weeklyUsed: number;
-	weeklyCap: number;
-	monthlyCredits: number;
-	purchasedCredits: number;
-	freeCredits: number;
-	totalSpent: number;
-}
-
-function pct(used: number, cap: number): number {
-	return cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
-}
-
-// Consumption buckets: higher = worse. <50 green, 50-74 yellow, 75-89 orange, ≥90 red.
-function colorUsage(n: number): string {
-	const v = Math.round(n);
-	let color = GREEN;
-	if (v >= 50) color = YELLOW;
-	if (v >= 75) color = ORANGE;
-	if (v >= 90) color = RED;
-	return `${color}${v}%${RESET}`;
-}
-
-// Credits buckets: higher = better. ≥50 green, 25-49 yellow, 10-24 orange, <10 red.
-function colorCredits(remaining: number, planId: string): string {
-	const total = PLAN_CREDITS[planId];
-	const pctLeft = total && total > 0 ? (remaining / total) * 100 : 100;
-	let color = GREEN;
-	if (pctLeft < 50) color = YELLOW;
-	if (pctLeft < 25) color = ORANGE;
-	if (pctLeft < 10) color = RED;
-	const s = remaining.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-	return `${color}$${s}${RESET}`;
-}
-
-function shortModelName(full: string): string {
-	if (!full) return '';
-	let s = full.replace(/^[^/]+\//, '');
-	s = s.replace(/-\([^)]*\)/g, '');
-	s = s.replace(/\([^)]*\)/g, '');
-	s = s.replace(/-$/, '');
-	return s.trim();
-}
 
 async function readAuthKey(): Promise<string | null> {
 	const env = process.env.COMMAND_CODE_API_KEY?.trim();
@@ -147,13 +85,6 @@ async function fetchUsage(): Promise<Usage | null> {
 		freeCredits: creditsJson.credits.freeCredits ?? 0,
 		totalSpent: summaryJson.totalCost ?? 0,
 	};
-}
-
-function cyclePct(u: Usage): number {
-	const planTotal = PLAN_CREDITS[u.planId] ?? u.monthlyCredits;
-	const pool = Math.max(planTotal, u.monthlyCredits) + u.purchasedCredits + u.freeCredits;
-	if (pool <= 0) return 0;
-	return pct(u.totalSpent, pool);
 }
 
 export default function (cmd: ModApi): void {
@@ -220,7 +151,7 @@ export default function (cmd: ModApi): void {
 			};
 			if (cfg.model) {
 				model = cfg.model;
-				contextLimit = CONTEXT_WINDOWS[model] ?? contextLimit;
+				contextLimit = resolveContextWindow(model) ?? contextLimit;
 				if (cfg.reasoningEffort?.[model]) effort = cfg.reasoningEffort[model];
 			}
 		} catch {
@@ -234,7 +165,7 @@ export default function (cmd: ModApi): void {
 		if (meta.title) sessionName = meta.title;
 		if (meta.model) {
 			model = meta.model;
-			contextLimit = CONTEXT_WINDOWS[model] ?? contextLimit;
+			contextLimit = resolveContextWindow(model) ?? contextLimit;
 		}
 
 		// Scan transcript backwards for the latest assistant entry with model/effort/usage.
@@ -287,34 +218,25 @@ export default function (cmd: ModApi): void {
 			// not a git repo
 		}
 
-		const dot = dirty ? `${ORANGE}●${RESET}` : `${GREEN}●${RESET}`;
-		const branchText = branch ? `, ${branch} ${dot}` : '';
-		const nameText = sessionName ? `, ${sessionName}` : '';
+		const line = buildStatusLine({
+			cwd,
+			branch,
+			dirty,
+			sessionName,
+			model,
+			effort,
+			currentTokens,
+			contextLimit,
+			usage,
+		});
 
-		const ctx = contextLimit > 0 ? pct(currentTokens, contextLimit) : 0;
-
-		const shortModel = shortModelName(model);
-		const modelText = shortModel ? `${shortModel}, ` : '';
-		const effortText = effort ? `${effort}, ` : '';
-
-		let right = `${modelText}${effortText}cntx: ${colorUsage(ctx)}`;
-		if (usage) {
-			const usg = pct(usage.fiveHourUsed, usage.fiveHourCap);
-			const wkl = pct(usage.weeklyUsed, usage.weeklyCap);
-			const tot = cyclePct(usage);
-			const remaining = usage.monthlyCredits + usage.purchasedCredits + usage.freeCredits;
-			right += `, usge: ${colorUsage(usg)}, skly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, usage.planId)}`;
-		}
-
-		const left = `${cwd}${branchText}${nameText}`;
-
-		cmd.ui.setStatus(`${left}  ${DIM}│${RESET}  ${right}`);
+		cmd.ui.setStatus(line);
 	}
 
 	cmd.on('model_request_start', e => {
 		if (e.type === 'model_request_start' && typeof e.model === 'string') {
 			model = e.model;
-			contextLimit = CONTEXT_WINDOWS[model] ?? contextLimit;
+			contextLimit = resolveContextWindow(model) ?? contextLimit;
 		}
 	});
 
@@ -350,9 +272,20 @@ export default function (cmd: ModApi): void {
 		},
 		onSessionEnd: () => {
 			cmd.ui.setStatus(null);
+			if (interval) clearInterval(interval);
 		},
 	});
 
 	// Seed immediately too, in case the session-start hook has already fired.
 	void fullRefresh();
+
+	// Reactivity: re-render periodically so usage + git state stay fresh.
+	// Usage fetch is throttled to 30s internally; the render itself is cheap.
+	const interval = setInterval(() => {
+		void (async () => {
+			await refreshUsage();
+			await render();
+		})();
+	}, 30_000);
+	interval.unref?.();
 }

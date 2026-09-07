@@ -1,4 +1,4 @@
-# stockup-status-bar
+# cmd-statusline
 
 A Command Code mod that renders a persistent status bar under the input panel:
 

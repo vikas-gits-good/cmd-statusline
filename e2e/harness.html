@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>cmd-statusline harness</title>
+</head>
+<body>
+<div id="status"></div>
+<script type="module">
+// This harness imports lib.ts and renders a mock status line, so Playwright
+// can assert on the exact string + ANSI color codes without a real TUI.
+import {colorUsage, colorCredits, cyclePct, pct, shortModelName, resolveContextWindow, PLAN_CREDITS} from '/lib.ts';
+
+function render(scenario) {
+	const ctx = scenario.ctx ?? 0;
+	const model = scenario.model ?? 'deepseek/deepseek-v4-pro';
+	const shortModel = shortModelName(model);
+	const effort = scenario.effort ?? 'high';
+	const sessionName = scenario.sessionName ?? '';
+	const cwd = scenario.cwd ?? 'repo';
+	const branch = scenario.branch ?? 'main';
+	const dot = scenario.dirty ? '\x1b[38;5;208m●\x1b[0m' : '\x1b[32m●\x1b[0m';
+
+	const left = `${cwd}, ${branch} ${dot}${sessionName ? ', ' + sessionName : ''}`;
+
+	// hasUsage mirrors index.ts: when the API fails, only cntx renders.
+	const hasUsage = scenario.hasUsage !== false;
+	let right = `${shortModel}, ${effort}, cntx: ${colorUsage(ctx)}`;
+	if (hasUsage) {
+		const usg = scenario.usg ?? 0;
+		const wkl = scenario.wkl ?? 0;
+		const tot = scenario.tot ?? 0;
+		const remaining = scenario.remaining ?? 0;
+		const planId = scenario.planId ?? 'individual-pro';
+		right += `, usge: ${colorUsage(usg)}, skly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, planId)}`;
+	}
+
+	return `${left}  \x1b[2m│\x1b[0m  ${right}`;
+}
+
+window.renderStatus = render;
+</script>
+</body>
+</html>

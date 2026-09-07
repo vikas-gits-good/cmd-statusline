@@ -94,3 +94,43 @@ export function cyclePct(u: Usage): number {
 	if (pool <= 0) return 0;
 	return pct(u.totalSpent, pool);
 }
+
+export interface StatusState {
+	cwd: string;
+	branch: string;
+	dirty: boolean;
+	sessionName: string;
+	model: string;
+	effort: string;
+	currentTokens: number;
+	contextLimit: number;
+	usage: Usage | null;
+}
+
+const DIM = '\x1b[2m';
+
+// Pure render of the status line from state. Side-effect free; the only
+// place the string shape lives, so reactivity is a matter of calling this
+// with fresh state.
+export function buildStatusLine(s: StatusState): string {
+	const dot = s.dirty ? `${ORANGE}●${RESET}` : `${GREEN}●${RESET}`;
+	const branchText = s.branch ? `, ${s.branch} ${dot}` : '';
+	const nameText = s.sessionName ? `, ${s.sessionName}` : '';
+
+	const ctx = s.contextLimit > 0 ? pct(s.currentTokens, s.contextLimit) : 0;
+
+	const shortModel = shortModelName(s.model);
+	const modelText = shortModel ? `${shortModel}, ` : '';
+	const effortText = s.effort ? `${s.effort}, ` : '';
+
+	let right = `${modelText}${effortText}cntx: ${colorUsage(ctx)}`;
+	if (s.usage) {
+		const usg = pct(s.usage.fiveHourUsed, s.usage.fiveHourCap);
+		const wkl = pct(s.usage.weeklyUsed, s.usage.weeklyCap);
+		const tot = cyclePct(s.usage);
+		const remaining = s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits;
+		right += `, usge: ${colorUsage(usg)}, skly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, s.usage.planId)}`;
+	}
+
+	return `${s.cwd}${branchText}${nameText}  ${DIM}│${RESET}  ${right}`;
+}

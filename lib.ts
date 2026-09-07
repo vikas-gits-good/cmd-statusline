@@ -185,16 +185,27 @@ export function classifyConfigChange(setting: string, value: unknown): 'model' |
 	return null;
 }
 
+export const DEFAULT_CONTEXT_WINDOW = 200_000;
+
+export interface ResolveContextWindowOpts {
+	envOverride?: number;
+	fallback?: boolean;
+}
+
 // Resolve a context window for a model id, whether it arrives as a full
 // "provider/model" slug, an already-short name, or a short name that needs a
 // provider prefix (e.g. "deepseek-v4-pro" → "deepseek/deepseek-v4-pro").
-// Matching is case-insensitive as a fallback because the CLI's --list-models
-// lowercases some slugs while the context-window map preserves originals.
+// Precedence: env override (valid >0) → map lookup (case-insensitive) →
+// opts.fallback ? DEFAULT_CONTEXT_WINDOW : undefined.
 export function resolveContextWindow(
 	modelId: string,
 	windows: Record<string, number> = CONTEXT_WINDOWS,
+	opts: ResolveContextWindowOpts = {},
 ): number | undefined {
-	if (!modelId) return undefined;
+	if (opts.envOverride !== undefined && Number.isFinite(opts.envOverride) && opts.envOverride > 0) {
+		return opts.envOverride;
+	}
+	if (!modelId) return opts.fallback ? DEFAULT_CONTEXT_WINDOW : undefined;
 	const short = shortModelName(modelId);
 	// Try exact, then short, then a few common provider prefixes for short names.
 	const candidates = [modelId, short];
@@ -229,7 +240,7 @@ export function resolveContextWindow(
 		if (key.toLowerCase().endsWith(`/${shortLower}`) || key.toLowerCase() === shortLower)
 			return windows[key];
 	}
-	return undefined;
+	return opts.fallback ? DEFAULT_CONTEXT_WINDOW : undefined;
 }
 
 export function cyclePct(u: Usage): number {

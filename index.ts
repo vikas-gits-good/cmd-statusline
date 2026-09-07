@@ -17,6 +17,17 @@ export default function (cmd: ModApi): void {
 	// 0 = unknown context window. Never retain a stale previous model's window.
 	let contextLimit = 0;
 
+	// Optional env override for the context window (valid integer > 0).
+	const envContextWindow = (() => {
+		const raw = process.env.COMMANDCODE_CONTEXT_WINDOW;
+		if (!raw) return undefined;
+		const n = Number.parseInt(raw, 10);
+		return Number.isFinite(n) && n > 0 ? n : undefined;
+	})();
+
+	const resolveWindow = (m: string): number =>
+		resolveContextWindow(m, undefined, { envOverride: envContextWindow }) ?? 0;
+
 	let usage: Usage | null = null;
 	let lastUsageFetch = 0;
 	let refreshing = false;
@@ -113,7 +124,7 @@ export default function (cmd: ModApi): void {
 			};
 			if (cfg.model) {
 				model = cfg.model;
-				contextLimit = resolveContextWindow(model) ?? 0;
+				contextLimit = resolveWindow(model);
 				if (cfg.reasoningEffort?.[model]) effort = cfg.reasoningEffort[model];
 			}
 		} catch {
@@ -135,7 +146,7 @@ export default function (cmd: ModApi): void {
 		if (meta.title) sessionName = meta.title;
 		if (meta.model) {
 			model = meta.model;
-			contextLimit = resolveContextWindow(model) ?? 0;
+			contextLimit = resolveWindow(model);
 		}
 
 		// Scan transcript backwards for the latest assistant entry with model/effort/usage.
@@ -161,7 +172,7 @@ export default function (cmd: ModApi): void {
 			}
 			if (entry.model) {
 				model = entry.model;
-				contextLimit = resolveContextWindow(model) ?? 0;
+				contextLimit = resolveWindow(model);
 			}
 			if (entry.effort) effort = entry.effort;
 			if (entry.usage) {
@@ -216,7 +227,7 @@ export default function (cmd: ModApi): void {
 	cmd.on('model_request_start', (e) => {
 		if (e.type === 'model_request_start' && typeof e.model === 'string') {
 			model = e.model;
-			contextLimit = resolveContextWindow(model) ?? 0;
+			contextLimit = resolveWindow(model);
 		}
 	});
 
@@ -229,7 +240,7 @@ export default function (cmd: ModApi): void {
 			};
 			if (typeof ev.model === 'string') {
 				model = ev.model;
-				contextLimit = resolveContextWindow(model) ?? 0;
+				contextLimit = resolveWindow(model);
 			}
 			if (typeof ev.effort === 'string' && ev.effort) effort = ev.effort;
 			if (ev.usage) {
@@ -251,7 +262,7 @@ export default function (cmd: ModApi): void {
 		const kind = classifyConfigChange(e.setting, e.value);
 		if (kind === 'model') {
 			model = e.value as string;
-			contextLimit = resolveContextWindow(model) ?? 0;
+			contextLimit = resolveWindow(model);
 			enqueueRender();
 		} else if (kind === 'effort') {
 			effort = e.value as string;

@@ -33,6 +33,16 @@ npm run test:e2e      # sync model/plan lists, build harness, run Playwright
 
 The E2E suite auto-syncs the live model list and plan credits from `cmd` before running, so new models/plans are covered automatically. Five models are intentionally skipped because the Command Code CLI's own context-window map lacks them; the mod renders their `cntx` as `--`.
 
+## Security
+
+This mod never executes arbitrary shell. It only:
+
+- runs `git rev-parse --abbrev-ref HEAD` and `git status --porcelain` with static, hardcoded arguments (no user input is interpolated into git commands),
+- reads the Command Code API key from `COMMAND_CODE_API_KEY` (env-first) or `~/.commandcode/auth.json`, and never logs the key,
+- makes HTTPS-only API calls to `api.commandcode.ai`.
+
+Project-scoped mods are trust-gated by the Command Code host: they load only after the workspace trust prompt is accepted. User-scope and `--mod` installs load unconditionally, so install packages you trust.
+
 ## License
 
 MIT

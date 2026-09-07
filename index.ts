@@ -2,15 +2,9 @@
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type { ModApi } from '@commandcode/harness';
-import {
-	resolveContextWindow,
-	buildStatusLine,
-	normalizeBranch,
-	pickSessionName,
-	classifyConfigChange,
-	type Usage,
-} from './lib';
+import { resolveContextWindow, classifyConfigChange, type Usage } from './lib';
 import { fetchUsage } from './usage';
+import { renderStatus } from './render';
 
 const USAGE_FETCH_THROTTLE_MS = 30_000;
 const RENDER_INTERVAL_MS = 30_000;
@@ -180,39 +174,24 @@ export default function (cmd: ModApi): void {
 	async function render(): Promise<void> {
 		const cwd = (cmd.cwd || '').split(/[\\/]/).filter(Boolean).pop() || cmd.cwd || '';
 
-		let branch = '';
-		let dirty = false;
-		try {
-			const b = await cmd.exec({
-				command: 'git',
-				args: ['rev-parse', '--abbrev-ref', 'HEAD'],
-				cwd: cmd.cwd,
-			});
-			branch = normalizeBranch(b.stdout);
-			const s = await cmd.exec({ command: 'git', args: ['status', '--porcelain'], cwd: cmd.cwd });
-			dirty = s.stdout.trim().length > 0;
-		} catch {
-			// not a git repo
-		}
-
-		// Re-read the title so a manual /rename (disk-only, no event) wins over
-		// the cached session_titled value.
-		const diskTitle = await readTitleFromDisk();
-		const resolvedSessionName = pickSessionName(diskTitle, sessionName);
-
-		const line = buildStatusLine({
-			cwd,
-			branch,
-			dirty,
-			sessionName: resolvedSessionName,
-			model,
-			effort,
-			currentTokens,
-			contextLimit,
-			usage,
-		});
-
-		cmd.ui.setStatus(line);
+		await renderStatus(
+			{
+				cwd,
+				branch: '',
+				dirty: false,
+				sessionName,
+				model,
+				effort,
+				currentTokens,
+				contextLimit,
+				usage,
+			},
+			{
+				exec: (args) => cmd.exec(args),
+				readTitle: readTitleFromDisk,
+				setStatus: (line) => cmd.ui.setStatus(line),
+			},
+		);
 	}
 
 	// Single-flight: every render request chains through one promise so a

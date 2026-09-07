@@ -2,7 +2,13 @@
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type { ModApi } from '@commandcode/harness';
-import { resolveContextWindow, classifyConfigChange, debounce, type Usage } from './lib';
+import {
+	resolveContextWindow,
+	classifyConfigChange,
+	debounce,
+	DEFAULT_TEMPLATE,
+	type Usage,
+} from './lib';
 import { fetchUsage } from './usage';
 import { renderStatus } from './render';
 
@@ -16,6 +22,10 @@ export default function (cmd: ModApi): void {
 	let currentTokens = 0;
 	// 0 = unknown context window. Never retain a stale previous model's window.
 	let contextLimit = 0;
+
+	// Configurable format template, read once at factory time.
+	cmd.addFlag('statusline_format', { type: 'string', default: DEFAULT_TEMPLATE });
+	const template = String(cmd.getFlag('statusline_format') ?? DEFAULT_TEMPLATE);
 
 	// Optional env override for the context window (valid integer > 0).
 	const envContextWindow = (() => {
@@ -198,6 +208,7 @@ export default function (cmd: ModApi): void {
 				currentTokens,
 				contextLimit,
 				usage,
+				template,
 			},
 			{
 				exec: (args) => cmd.exec({ ...args, signal }),

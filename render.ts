@@ -1,6 +1,12 @@
 // Injectable render body, extracted from index.ts so error paths are
 // unit-testable. Mirrors usage.ts's UsageDeps pattern.
-import { buildStatusLine, normalizeBranch, pickSessionName, type Usage } from './lib';
+import {
+	renderTemplate,
+	DEFAULT_TEMPLATE,
+	normalizeBranch,
+	pickSessionName,
+	type Usage,
+} from './lib';
 
 export interface RenderInput {
 	cwd: string;
@@ -12,6 +18,7 @@ export interface RenderInput {
 	currentTokens: number;
 	contextLimit: number;
 	usage: Usage | null;
+	template?: string;
 }
 
 export interface ExecResult {
@@ -67,7 +74,7 @@ export async function renderStatus(input: RenderInput, deps: RenderDeps): Promis
 		const diskTitle = await deps.readTitle();
 		const resolvedSessionName = pickSessionName(diskTitle, input.sessionName);
 
-		const line = buildStatusLine({
+		const line = renderTemplate(input.template ?? DEFAULT_TEMPLATE, {
 			cwd: input.cwd,
 			branch,
 			dirty,

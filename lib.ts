@@ -344,104 +344,88 @@ export function debounce<T extends (...args: never[]) => void>(
 // priority) first, and any single field that is too long is ellipsized as a
 // whole ("…"), never partially cut to wrap onto a second line.
 export function buildStatusLine(s: StatusState, maxWidth?: number): string {
-	const seg = computeStatus(s);
+	return renderTemplate(DEFAULT_TEMPLATE, s, maxWidth);
+}
 
+export const DEFAULT_TEMPLATE =
+	'{cwd}{branchPrefix}{sessionPrefix}  {separator}  {modelPrefix}{effortPrefix}cntx: {cntx}{usgePrefix}{wklyPrefix}{totlPrefix}{crdtPrefix}';
+
+// The token map for renderTemplate. Values are computed once from StatusState
+// so interpolation is a single lookup (never re-scans substituted output).
+function templateTokens(seg: StatusSegments, s: StatusState) {
 	const dot = seg.dirty === 'dirty' ? `${ORANGE}●${RESET}` : `${GREEN}●${RESET}`;
 	const shortModel = shortModelName(seg.model);
-
-	// Unknown context window → explicit unavailable marker, never a misleading
-	// green 0%.
 	const cntxText = seg.cntx === null ? `${DIM}--${RESET}` : colorUsage(seg.cntx);
+	const crdtText = s.usage
+		? colorCredits(
+				s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits,
+				s.usage.planId,
+			)
+		: null;
 
-	// Each field is atomic: whole, ellipsized, or absent — never split.
-	// priority order = left-to-right display order; higher = more important.
-	type Field = { text: string; priority: number; droppable: boolean };
-	const fields: Field[] = [
-		{ text: seg.cwd, priority: 100, droppable: false }, // identity, never drop
-	];
-	if (seg.branch) fields.push({ text: `${seg.branch} ${dot}`, priority: 90, droppable: false });
-	if (seg.sessionName) fields.push({ text: seg.sessionName, priority: 80, droppable: true });
-	fields.push(
-		{ text: DIM + '│' + RESET, priority: 70, droppable: false }, // separator
-		{ text: shortModel, priority: 60, droppable: false },
-		{ text: seg.effort, priority: 50, droppable: true },
-		{ text: `cntx: ${cntxText}`, priority: 40, droppable: false },
-	);
-	if (s.usage) {
-		fields.push(
-			{ text: `usge: ${colorUsage(seg.usge ?? 0)}`, priority: 30, droppable: true },
-			{ text: `wkly: ${colorUsage(seg.wkly ?? 0)}`, priority: 20, droppable: true },
-			{ text: `totl: ${colorUsage(seg.totl ?? 0)}`, priority: 10, droppable: true },
-			{
-				text: `crdt: ${colorCredits(s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits, s.usage.planId)}`,
-				priority: 5,
-				droppable: true,
-			},
-		);
-	}
-
-	const join = (parts: Field[]): string => {
-		let out = '';
-		for (let i = 0; i < parts.length; i++) {
-			const p = parts[i];
-			if (i === 0) {
-				out += p.text;
-			} else if (p.priority === 70) {
-				// separator
-				out += `  ${p.text}  `;
-			} else if (parts[i - 1]?.priority === 70) {
-				out += p.text;
-			} else {
-				out += `, ${p.text}`;
-			}
-		}
-		return out;
+	return {
+		cwd: seg.cwd,
+		branch: seg.branch,
+		branchPrefix: seg.branch ? `, ${seg.branch} ${dot}` : '',
+		session: seg.sessionName,
+		sessionPrefix: seg.sessionName ? `, ${seg.sessionName}` : '',
+		model: shortModel,
+		modelPrefix: shortModel ? `${shortModel}, ` : '',
+		effort: seg.effort,
+		effortPrefix: seg.effort ? `${seg.effort}, ` : '',
+		cntx: cntxText,
+		cntxRemaining: seg.cntxRemaining === null ? `${DIM}--${RESET}` : colorUsage(seg.cntxRemaining),
+		separator: `${DIM}│${RESET}`,
+		usge: seg.usge === null ? `${DIM}--${RESET}` : colorUsage(seg.usge),
+		usgePrefix: seg.usge === null ? '' : `, usge: ${colorUsage(seg.usge)}`,
+		wkly: seg.wkly === null ? `${DIM}--${RESET}` : colorUsage(seg.wkly),
+		wklyPrefix: seg.wkly === null ? '' : `, wkly: ${colorUsage(seg.wkly)}`,
+		totl: seg.totl === null ? `${DIM}--${RESET}` : colorUsage(seg.totl),
+		totlPrefix: seg.totl === null ? '' : `, totl: ${colorUsage(seg.totl)}`,
+		crdt: crdtText === null ? `${DIM}--${RESET}` : crdtText,
+		crdtPrefix: crdtText === null ? '' : `, crdt: ${crdtText}`,
 	};
+}
 
-	const fits = (line: string) => maxWidth === undefined || stripAnsi(line).length <= maxWidth;
+// Render a status line from a template string. Interpolates {token} in a
+// single regex pass (lookup-by-token, never re-scans substituted output) so a
+// user-controlled value containing "{model}" or "$&" can't be re-interpreted.
+//
+// When maxWidth is set, trailing "prefix" tokens are dropped from lowest
+// priority first (crdt → totl → wkly → usge → session → effort), matching the
+// original field-drop behavior; the line is ellipsized as a last resort.
+export function renderTemplate(template: string, s: StatusState, maxWidth?: number): string {
+	const seg = computeStatus(s);
+	const tokens = templateTokens(seg, s);
 
-	// Greedy: keep as many fields as possible in priority order, dropping the
-	// lowest-priority droppable fields when the line is too wide.
-	let kept = [...fields];
-	let line = join(kept);
-	if (fits(line)) return line;
+	const interpolate = (tpl: string): string =>
+		tpl.replace(/\{([a-zA-Z]+)\}/g, (whole, name: string) =>
+			name in tokens ? String(tokens[name as keyof typeof tokens]) : whole,
+		);
 
-	// Drop droppable fields from lowest priority upward.
-	const droppable = kept.filter((f) => f.droppable).sort((a, b) => a.priority - b.priority);
-	for (const drop of droppable) {
-		kept = kept.filter((f) => f !== drop);
-		line = join(kept);
-		if (fits(line)) return line;
+	const out = interpolate(template);
+
+	if (maxWidth === undefined || stripAnsi(out).length <= maxWidth) return out;
+
+	// Progressive field drop: remove the rightmost droppable token names until
+	// the line fits. Order = lowest priority first.
+	const dropOrder = [
+		'crdtPrefix',
+		'totlPrefix',
+		'wklyPrefix',
+		'usgePrefix',
+		'sessionPrefix',
+		'effortPrefix',
+	];
+	let tpl = template;
+	for (const name of dropOrder) {
+		if (!tpl.includes(`{${name}}`)) continue;
+		const candidate = tpl.replace(new RegExp(`\\{${name}\\}`, 'g'), '');
+		const rendered = interpolate(candidate);
+		if (stripAnsi(rendered).length <= maxWidth) return rendered;
+		tpl = candidate;
 	}
 
-	// Still too wide: ellipsize the single widest non-droppable field so the
-	// whole line fits on one line without a partial cut. At this point maxWidth
-	// is guaranteed to be defined (the earlier fits() already returned for
-	// undefined) and the line is still too wide.
-	line = join(kept);
-	const visible = stripAnsi(line);
-	if (visible.length <= maxWidth!) return line;
-
-	// Separator consumes a fixed width; subtract it.
-	const sep = kept.find((f) => f.priority === 70);
-	const sepWidth = sep ? stripAnsi(`  ${sep.text}  `).length : 0;
-	const sepIdx = kept.indexOf(sep!);
-	const before = kept.slice(0, sepIdx);
-	const after = kept.slice(sepIdx + 1);
-	const beforeWidth = stripAnsi(join(before)).length;
-	const afterWidth = stripAnsi(join(after)).length;
-	const available = Math.max(1, maxWidth! - beforeWidth - afterWidth - sepWidth);
-	// Ellipsize the widest field in `before` (cwd/branch).
-	const target = before.reduce(
-		(a, b) => (stripAnsi(b.text).length > stripAnsi(a.text).length ? b : a),
-		before[0],
-	);
-	if (target) {
-		const idx = kept.indexOf(target);
-		const ell = ellipsize(target.text, available);
-		const rebuilt = join([...kept.slice(0, idx), { ...target, text: ell }, ...kept.slice(idx + 1)]);
-		if (fits(rebuilt)) return rebuilt;
-	}
-	// Fallback: return the leftmost identity ellipsized to the budget.
-	return ellipsize(seg.cwd, maxWidth!);
+	// Last resort: ellipsize the whole line.
+	return ellipsize(interpolate(tpl), maxWidth);
 }

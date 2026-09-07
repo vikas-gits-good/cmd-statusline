@@ -7,38 +7,80 @@
 <body>
 <div id="status"></div>
 <script type="module">
-// This harness imports lib.ts and renders a mock status line, so Playwright
-// can assert on the exact string + ANSI color codes without a real TUI.
-import {colorUsage, colorCredits, cyclePct, pct, shortModelName, resolveContextWindow, PLAN_CREDITS} from '/lib.ts';
+// Harness renders the status line as semantic DOM with data-testid, so
+// Playwright selectors target stable segments instead of raw ANSI strings.
+import {buildStatusLine, computeStatus} from '/e2e/lib.browser.js';
 
-function render(scenario) {
-	const ctx = scenario.ctx ?? 0;
-	const model = scenario.model ?? 'deepseek/deepseek-v4-pro';
-	const shortModel = shortModelName(model);
-	const effort = scenario.effort ?? 'high';
-	const sessionName = scenario.sessionName ?? '';
-	const cwd = scenario.cwd ?? 'repo';
-	const branch = scenario.branch ?? 'main';
-	const dot = scenario.dirty ? '\x1b[38;5;208m●\x1b[0m' : '\x1b[32m●\x1b[0m';
-
-	const left = `${cwd}, ${branch} ${dot}${sessionName ? ', ' + sessionName : ''}`;
-
-	// hasUsage mirrors index.ts: when the API fails, only cntx renders.
+function renderStatus(scenario) {
+	// Scenario keys are human intent: usg/wkl/tot are target percentages,
+	// remaining is the dollar figure for crdt. Derive raw usage fields so
+	// the real pct/cyclePct math produces exactly those numbers.
 	const hasUsage = scenario.hasUsage !== false;
-	let right = `${shortModel}, ${effort}, cntx: ${colorUsage(ctx)}`;
-	if (hasUsage) {
-		const usg = scenario.usg ?? 0;
-		const wkl = scenario.wkl ?? 0;
-		const tot = scenario.tot ?? 0;
-		const remaining = scenario.remaining ?? 0;
-		const planId = scenario.planId ?? 'individual-pro';
-		right += `, usge: ${colorUsage(usg)}, skly: ${colorUsage(wkl)}, totl: ${colorUsage(tot)}, crdt: ${colorCredits(remaining, planId)}`;
+	const usg = scenario.usg ?? 0;
+	const wkl = scenario.wkl ?? 0;
+	const tot = scenario.tot ?? 0;
+	const remaining = scenario.remaining ?? 0;
+
+	const state = {
+		cwd: scenario.cwd ?? 'repo',
+		branch: scenario.branch ?? 'main',
+		dirty: scenario.dirty ?? false,
+		sessionName: scenario.sessionName ?? '',
+		model: scenario.model ?? 'deepseek/deepseek-v4-pro',
+		effort: scenario.effort ?? 'high',
+		currentTokens: scenario.currentTokens ?? 0,
+		contextLimit: scenario.contextLimit ?? 1_000_000,
+		usage: hasUsage
+			? {
+				planId: scenario.planId ?? 'individual-pro',
+				fiveHourUsed: usg,
+				fiveHourCap: 100,
+				weeklyUsed: wkl,
+				weeklyCap: 100,
+				// monthlyCredits doubles as the remaining-dollar pool for crdt
+				// AND the denominator for cycle %, so derive totalSpent from tot.
+				monthlyCredits: remaining,
+				purchasedCredits: 0,
+				freeCredits: 0,
+				totalSpent: (tot / 100) * remaining,
+			}
+			: null,
+	};
+
+	const full = buildStatusLine(state);
+	const seg = computeStatus(state);
+	const root = document.getElementById('status');
+	root.innerHTML = '';
+
+	const entries = [
+		['cwd', seg.cwd],
+		['branch', seg.branch],
+		['dirty', seg.dirty],
+		['session-name', seg.sessionName],
+		['model', seg.model],
+		['effort', seg.effort],
+		['cntx', String(seg.cntx)],
+	];
+	if (seg.usge !== null) entries.push(['usge', String(seg.usge)]);
+	if (seg.skly !== null) entries.push(['skly', String(seg.skly)]);
+	if (seg.totl !== null) entries.push(['totl', String(seg.totl)]);
+	if (seg.crdt !== null) entries.push(['crdt', seg.crdt]);
+
+	for (const [id, value] of entries) {
+		const span = document.createElement('span');
+		span.setAttribute('data-testid', id);
+		span.textContent = value;
+		root.appendChild(span);
+		if (id !== entries[entries.length - 1][0]) {
+			root.appendChild(document.createTextNode(' '));
+		}
 	}
 
-	return `${left}  \x1b[2m│\x1b[0m  ${right}`;
+	window.__lastRawStatusLine = full;
+	return full;
 }
 
-window.renderStatus = render;
+window.renderStatus = renderStatus;
 </script>
 </body>
 </html>

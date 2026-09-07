@@ -8,8 +8,22 @@
 			"./index.ts"
 		]
 	},
+	"files": [
+		"index.ts",
+		"lib.ts",
+		"README.md",
+		"LICENSE",
+		"statusline.png"
+	],
+	"scripts": {
+		"test": "vitest run",
+		"test:unit": "vitest run",
+		"test:e2e": "npm run build:e2e && playwright test",
+		"build:e2e": "esbuild lib.ts --bundle --format=esm --outfile=e2e/lib.browser.js"
+	},
 	"devDependencies": {
 		"@playwright/test": "^1.63.0",
+		"esbuild": "^0.25.0",
 		"vitest": "^3.2.7"
 	}
 }

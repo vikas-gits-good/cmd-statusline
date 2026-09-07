@@ -107,6 +107,45 @@ export interface StatusState {
 	usage: Usage | null;
 }
 
+export interface StatusSegments {
+	cwd: string;
+	branch: string;
+	dirty: string;
+	sessionName: string;
+	model: string;
+	effort: string;
+	cntx: number;
+	usge: number | null;
+	skly: number | null;
+	totl: number | null;
+	crdt: string | null;
+}
+
+// Compute semantic segments (for tests/harness) from state, using the same
+// math as buildStatusLine. No string concatenation here — just the values.
+export function computeStatus(s: StatusState): StatusSegments {
+	const ctx = s.contextLimit > 0 ? pct(s.currentTokens, s.contextLimit) : 0;
+	const usge = s.usage ? pct(s.usage.fiveHourUsed, s.usage.fiveHourCap) : null;
+	const skly = s.usage ? pct(s.usage.weeklyUsed, s.usage.weeklyCap) : null;
+	const totl = s.usage ? cyclePct(s.usage) : null;
+	const crdt = s.usage
+		? (s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits).toFixed(2)
+		: null;
+	return {
+		cwd: s.cwd,
+		branch: s.branch,
+		dirty: s.dirty ? 'dirty' : 'clean',
+		sessionName: s.sessionName,
+		model: s.model,
+		effort: s.effort,
+		cntx: Math.round(ctx),
+		usge: usge === null ? null : Math.round(usge),
+		skly: skly === null ? null : Math.round(skly),
+		totl: totl === null ? null : Math.round(totl),
+		crdt,
+	};
+}
+
 const DIM = '\x1b[2m';
 
 // Pure render of the status line from state. Side-effect free; the only

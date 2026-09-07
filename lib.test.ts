@@ -8,6 +8,7 @@ import {
 	cyclePct,
 	shortModelName,
 	resolveContextWindow,
+	type Usage,
 } from './lib';
 
 const GREEN = '\x1b[32m';
@@ -91,16 +92,29 @@ describe('colorCredits across all plans', () => {
 });
 
 describe('cyclePct', () => {
+	const usage = (overrides: Partial<Usage>): Usage => ({
+		planId: 'individual-pro',
+		fiveHourUsed: 0,
+		fiveHourCap: 0,
+		weeklyUsed: 0,
+		weeklyCap: 0,
+		monthlyCredits: 30,
+		purchasedCredits: 0,
+		freeCredits: 0,
+		totalSpent: 0,
+		...overrides,
+	});
+
 	it('returns 0 when total spent is 0', () => {
-		expect(cyclePct({planId: 'individual-pro', monthlyCredits: 30, purchasedCredits: 0, freeCredits: 0, totalSpent: 0} as never)).toBe(0);
+		expect(cyclePct(usage({totalSpent: 0}))).toBe(0);
 	});
 	it('computes against plan pool plus purchased/free', () => {
 		// pro-v1 = 80 base, + 20 purchased = 100 pool; 50 spent = 50%
-		const u = {planId: 'individual-pro-v1', monthlyCredits: 80, purchasedCredits: 20, freeCredits: 0, totalSpent: 50} as never;
+		const u = usage({planId: 'individual-pro-v1', monthlyCredits: 80, purchasedCredits: 20, totalSpent: 50});
 		expect(cyclePct(u)).toBe(50);
 	});
 	it('caps at 100 when fully consumed', () => {
-		const u = {planId: 'individual-go', monthlyCredits: 10, purchasedCredits: 0, freeCredits: 0, totalSpent: 999} as never;
+		const u = usage({planId: 'individual-go', monthlyCredits: 10, totalSpent: 999});
 		expect(cyclePct(u)).toBe(100);
 	});
 });

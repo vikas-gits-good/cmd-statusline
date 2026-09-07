@@ -66,13 +66,7 @@ describe('all Command Code plans (credit color coding)', () => {
 });
 
 describe('usage color coding at 100% (all windows)', () => {
-	it('5-hour at 100% is red', () => {
-		expect(colorUsage(100)).toContain('\x1b[31m');
-	});
-	it('weekly at 100% is red', () => {
-		expect(colorUsage(100)).toContain('\x1b[31m');
-	});
-	it('total at 100% is red', () => {
+	it('any window at 100% is red', () => {
 		expect(colorUsage(100)).toContain('\x1b[31m');
 	});
 	it('usage above 100% clamps display to 100 and red', () => {

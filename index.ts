@@ -3,76 +3,10 @@
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type {ModApi} from '@commandcode/harness';
 import {resolveContextWindow, buildStatusLine, type Usage} from './lib';
+import {fetchUsage} from './usage';
 
-const API_BASE = 'https://api.commandcode.ai';
-const CLIENT_VERSION = '1.50.0';
 const USAGE_FETCH_THROTTLE_MS = 30_000;
-const USAGE_FETCH_TIMEOUT_MS = 10_000;
 const RENDER_INTERVAL_MS = 30_000;
-
-async function readAuthKey(): Promise<string | null> {
-	const env = process.env.COMMAND_CODE_API_KEY?.trim();
-	if (env) return env;
-
-	try {
-		const fs = await import('node:fs/promises');
-		const os = await import('node:os');
-		const path = await import('node:path');
-		const p = path.join(os.homedir(), '.commandcode', 'auth.json');
-		const raw = await fs.readFile(p, 'utf8');
-		const parsed = JSON.parse(raw) as {apiKey?: string};
-		return parsed.apiKey ?? null;
-	} catch {
-		return null;
-	}
-}
-
-async function fetchUsage(): Promise<Usage | null> {
-	const key = await readAuthKey();
-	if (!key) return null;
-
-	const headers = {
-		Authorization: `Bearer ${key}`,
-		'Content-Type': 'application/json',
-		'User-Agent': 'cli',
-		'x-cli-environment': 'cli',
-		'x-command-code-version': CLIENT_VERSION,
-	};
-
-	const fetchJson = async (url: string) => {
-		const res = await fetch(url, {headers, signal: AbortSignal.timeout(USAGE_FETCH_TIMEOUT_MS)});
-		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-		return res.json();
-	};
-
-	const [creditsJson, subJson] = await Promise.all([
-		fetchJson(`${API_BASE}/alpha/billing/credits`),
-		fetchJson(`${API_BASE}/alpha/billing/subscriptions`),
-	]) as [
-		{
-			credits: {monthlyCredits?: number; purchasedCredits?: number; freeCredits?: number};
-			windowLimits: {fiveHour?: {used?: number; cap?: number}; weekly?: {used?: number; cap?: number}};
-		},
-		{data?: {planId?: string; currentPeriodStart?: string}},
-	];
-
-	const planId = subJson.data?.planId ?? '';
-	const since = subJson.data?.currentPeriodStart ?? undefined;
-	const summaryPath = `${API_BASE}/alpha/usage/summary${since ? `?since=${encodeURIComponent(since)}` : ''}`;
-	const summaryJson = (await fetchJson(summaryPath)) as {totalCost?: number};
-
-	return {
-		planId,
-		fiveHourUsed: creditsJson.windowLimits.fiveHour?.used ?? 0,
-		fiveHourCap: creditsJson.windowLimits.fiveHour?.cap ?? 0,
-		weeklyUsed: creditsJson.windowLimits.weekly?.used ?? 0,
-		weeklyCap: creditsJson.windowLimits.weekly?.cap ?? 0,
-		monthlyCredits: creditsJson.credits.monthlyCredits ?? 0,
-		purchasedCredits: creditsJson.credits.purchasedCredits ?? 0,
-		freeCredits: creditsJson.credits.freeCredits ?? 0,
-		totalSpent: summaryJson.totalCost ?? 0,
-	};
-}
 
 export default function (cmd: ModApi): void {
 	let model = '';

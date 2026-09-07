@@ -21,6 +21,18 @@ Percentages are color-coded by severity. Usage data comes from the Command Code 
 cmd mods add vikas-gits-good/cmd-statusline -g
 ```
 
+## Development
+
+Prerequisites: Node.js 22+, `cmd` on PATH (the sync scripts read model/plan data from the installed CLI).
+
+```bash
+npm ci                # NODE_ENV=development required (npm omits dev deps otherwise)
+npm run test:unit     # vitest (unit + pure logic)
+npm run test:e2e      # sync model/plan lists, build harness, run Playwright
+```
+
+The E2E suite auto-syncs the live model list and plan credits from `cmd` before running, so new models/plans are covered automatically. Five models are intentionally skipped because the Command Code CLI's own context-window map lacks them; the mod renders their `cntx` as `--`.
+
 ## License
 
 MIT

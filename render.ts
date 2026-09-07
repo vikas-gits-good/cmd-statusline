@@ -9,7 +9,10 @@ import {
 } from './lib';
 
 export interface RenderInput {
+	// Display basename (last path component) shown in {cwd}.
 	cwd: string;
+	// Absolute working directory used for git. Defaults to cwd when omitted.
+	gitCwd?: string;
 	branch: string;
 	dirty: boolean;
 	sessionName: string;
@@ -19,6 +22,7 @@ export interface RenderInput {
 	contextLimit: number;
 	usage: Usage | null;
 	template?: string;
+	maxWidth?: number;
 }
 
 export interface ExecResult {
@@ -47,6 +51,7 @@ export async function renderStatus(input: RenderInput, deps: RenderDeps): Promis
 	if (deps.signal?.aborted) return;
 
 	try {
+		const gitCwd = input.gitCwd ?? input.cwd;
 		let branch = input.branch;
 		let dirty = input.dirty;
 
@@ -54,14 +59,14 @@ export async function renderStatus(input: RenderInput, deps: RenderDeps): Promis
 			const b = await deps.exec({
 				command: 'git',
 				args: ['rev-parse', '--abbrev-ref', 'HEAD'],
-				cwd: input.cwd,
+				cwd: gitCwd,
 				signal: deps.signal,
 			});
 			branch = normalizeBranch(b.stdout);
 			const s = await deps.exec({
 				command: 'git',
 				args: ['status', '--porcelain'],
-				cwd: input.cwd,
+				cwd: gitCwd,
 				signal: deps.signal,
 			});
 			dirty = s.stdout.trim().length > 0;
@@ -74,17 +79,21 @@ export async function renderStatus(input: RenderInput, deps: RenderDeps): Promis
 		const diskTitle = await deps.readTitle();
 		const resolvedSessionName = pickSessionName(diskTitle, input.sessionName);
 
-		const line = renderTemplate(input.template ?? DEFAULT_TEMPLATE, {
-			cwd: input.cwd,
-			branch,
-			dirty,
-			sessionName: resolvedSessionName,
-			model: input.model,
-			effort: input.effort,
-			currentTokens: input.currentTokens,
-			contextLimit: input.contextLimit,
-			usage: input.usage,
-		});
+		const line = renderTemplate(
+			input.template ?? DEFAULT_TEMPLATE,
+			{
+				cwd: input.cwd,
+				branch,
+				dirty,
+				sessionName: resolvedSessionName,
+				model: input.model,
+				effort: input.effort,
+				currentTokens: input.currentTokens,
+				contextLimit: input.contextLimit,
+				usage: input.usage,
+			},
+			input.maxWidth,
+		);
 
 		deps.setStatus(line);
 	} catch {

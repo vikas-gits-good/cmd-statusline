@@ -97,4 +97,18 @@ describe('renderStatus (graceful degradation)', () => {
 		await renderStatus(input(), d);
 		expect(d.setStatusCalls).toHaveLength(0);
 	});
+
+	it('uses gitCwd (not the display basename) for git exec', async () => {
+		let capturedCwd: string | undefined;
+		const d = deps({
+			exec: async ({ cwd }) => {
+				capturedCwd = cwd;
+				return { stdout: 'feat/x\n', stderr: '', code: 0 };
+			},
+		});
+		await renderStatus(input({ cwd: 'repo', gitCwd: '/abs/path/to/repo' }), d);
+		expect(capturedCwd).toBe('/abs/path/to/repo');
+		// The rendered line still uses the display basename.
+		expect(d.setStatusCalls[0]).toContain('repo');
+	});
 });

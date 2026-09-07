@@ -372,9 +372,28 @@ export function buildStatusInput(s: StatusState, extras: StatusInputExtras = {})
 // ellipsis so truncation is always visible and never a hard mid-word cut.
 export function ellipsize(text: string, max: number): string {
 	if (max <= 0) return '…';
-	if (text.length <= max) return text;
+	// Measure and slice on visible (ANSI-stripped) text, but preserve leading
+	// color codes so the ellipsized result keeps its intended styling and never
+	// emits an unterminated escape sequence.
+	const visible = stripAnsi(text);
+	if (visible.length <= max) return text;
 	if (max === 1) return '…';
-	return `${text.slice(0, max - 1).trimEnd()}…`;
+
+	// Re-slice the RAW text to the same visible length, preserving any ANSI
+	// codes that appear before the cut point.
+	let rawIdx = 0;
+	let visibleCount = 0;
+	while (rawIdx < text.length && visibleCount < max - 1) {
+		if (text[rawIdx] === '\x1b') {
+			// Skip a full ANSI escape sequence.
+			while (rawIdx < text.length && text[rawIdx] !== 'm') rawIdx++;
+			rawIdx++; // skip the 'm'
+			continue;
+		}
+		rawIdx++;
+		visibleCount++;
+	}
+	return text.slice(0, rawIdx).trimEnd() + '…';
 }
 
 // Debounce a function: coalesce calls within `ms` into a single trailing call.

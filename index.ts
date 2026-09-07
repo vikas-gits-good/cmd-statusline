@@ -79,9 +79,11 @@ export default function (cmd: ModApi): void {
 		const path = await import('node:path');
 
 		// COMMANDCODE_SCRATCHPAD = .../<cwd-slug>/<session-id>/scratchpad
+		// Split on either separator — the scratchpad path always uses forward
+		// slashes regardless of the host OS.
 		const scratch = process.env.COMMANDCODE_SCRATCHPAD;
 		if (!scratch) return null;
-		const parts = scratch.split(path.sep).filter(Boolean);
+		const parts = scratch.split(/[\\/]/).filter(Boolean);
 		const scratchIdx = parts.lastIndexOf('scratchpad');
 		const sessionId = scratchIdx >= 1 ? parts[scratchIdx - 1] : null;
 		if (!sessionId) return null;
@@ -200,6 +202,7 @@ export default function (cmd: ModApi): void {
 		await renderStatus(
 			{
 				cwd,
+				gitCwd: cmd.cwd,
 				branch: '',
 				dirty: false,
 				sessionName,
@@ -209,6 +212,7 @@ export default function (cmd: ModApi): void {
 				contextLimit,
 				usage,
 				template,
+				maxWidth: process.stdout.columns,
 			},
 			{
 				exec: (args) => cmd.exec({ ...args, signal }),

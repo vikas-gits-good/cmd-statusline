@@ -207,38 +207,54 @@ export default function (cmd: ModApi): void {
 
 	// Single source of truth for reloads: read title/model/effort/context from disk.
 	async function refreshFromDisk(): Promise<void> {
+		const fs = await import('node:fs/promises');
+		const os = await import('node:os');
+		const path = await import('node:path');
+
+		// Fallback for brand-new sessions (no transcript yet): configured model + effort.
 		try {
-			const files = await locateSessionFiles();
-			if (!files) return;
-			const fs = await import('node:fs/promises');
-
-			const meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {title?: string; model?: string};
-			if (meta.title) sessionName = meta.title;
-			if (meta.model) {
-				model = meta.model;
+			const cfgPath = path.join(os.homedir(), '.commandcode', 'config.json');
+			const cfg = JSON.parse(await fs.readFile(cfgPath, 'utf8')) as {
+				model?: string;
+				reasoningEffort?: Record<string, string>;
+			};
+			if (cfg.model) {
+				model = cfg.model;
 				contextLimit = CONTEXT_WINDOWS[model] ?? contextLimit;
-			}
-
-			// Scan transcript backwards for the latest assistant entry with effort/usage.
-			const raw = await fs.readFile(files.transcriptPath, 'utf8');
-			const lines = raw.split('\n');
-			for (let i = lines.length - 1; i >= 0; i--) {
-				const line = lines[i].trim();
-				if (!line) continue;
-				let entry: {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
-				try {
-					entry = JSON.parse(line);
-				} catch {
-					continue;
-				}
-				if (entry.effort) effort = entry.effort;
-				if (entry.usage) {
-					currentTokens = (entry.usage.inputTokens ?? 0) + (entry.usage.outputTokens ?? 0);
-					break;
-				}
+				if (cfg.reasoningEffort?.[model]) effort = cfg.reasoningEffort[model];
 			}
 		} catch {
-			// keep whatever is in memory
+			// config.json unavailable; fall through to transcript below
+		}
+
+		const files = await locateSessionFiles();
+		if (!files) return;
+
+		const meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {title?: string; model?: string};
+		if (meta.title) sessionName = meta.title;
+		if (meta.model) {
+			model = meta.model;
+			contextLimit = CONTEXT_WINDOWS[model] ?? contextLimit;
+		}
+
+		// Scan transcript backwards for the latest assistant entry with model/effort/usage.
+		const raw = await fs.readFile(files.transcriptPath, 'utf8');
+		const lines = raw.split('\n');
+		for (let i = lines.length - 1; i >= 0; i--) {
+			const line = lines[i].trim();
+			if (!line) continue;
+			let entry: {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				continue;
+			}
+			if (entry.model) model = entry.model;
+			if (entry.effort) effort = entry.effort;
+			if (entry.usage) {
+				currentTokens = (entry.usage.inputTokens ?? 0) + (entry.usage.outputTokens ?? 0);
+				break;
+			}
 		}
 	}
 

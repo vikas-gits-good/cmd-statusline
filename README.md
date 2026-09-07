@@ -2,9 +2,7 @@
 
 A Command Code mod that renders a persistent status bar under the input panel:
 
-```
-<project>, <branch> <git-dot>, <session-name> │ <model>, <effort> ctx: N%, usg: N%, wkl: N%, tot: N%, crd: $N
-```
+![statusline](statusline.png)
 
 - `<project>` — current working directory basename
 - `<branch>` — git branch (green dot = clean, orange dot = uncommitted changes)

@@ -20,7 +20,7 @@ Percentages are color-coded by severity. Usage data comes from the Command Code 
 ## Install
 
 ```bash
-cmd mods add vikas-gits-good/stockup-status-bar -g
+cmd mods add vikas-gits-good/cmd-statusline -g
 ```
 
 ## License

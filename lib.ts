@@ -314,6 +314,29 @@ export function ellipsize(text: string, max: number): string {
 	return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+// Debounce a function: coalesce calls within `ms` into a single trailing call.
+// Returns a callable with a `cancel()` method to drop the pending invocation.
+export function debounce<T extends (...args: never[]) => void>(
+	fn: T,
+	ms: number,
+): T & { cancel: () => void } {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const debounced = ((...args: Parameters<T>) => {
+		if (timer !== undefined) clearTimeout(timer);
+		timer = setTimeout(() => {
+			timer = undefined;
+			fn(...args);
+		}, ms);
+	}) as T & { cancel: () => void };
+	debounced.cancel = () => {
+		if (timer !== undefined) {
+			clearTimeout(timer);
+			timer = undefined;
+		}
+	};
+	return debounced;
+}
+
 // Pure render of the status line from state. Derives all numbers from
 // computeStatus so there is exactly one implementation of the math.
 //

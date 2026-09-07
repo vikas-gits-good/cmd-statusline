@@ -2,7 +2,7 @@
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
 import type { ModApi } from '@commandcode/harness';
-import { resolveContextWindow, classifyConfigChange, type Usage } from './lib';
+import { resolveContextWindow, classifyConfigChange, debounce, type Usage } from './lib';
 import { fetchUsage } from './usage';
 import { renderStatus } from './render';
 
@@ -32,6 +32,8 @@ export default function (cmd: ModApi): void {
 	let lastUsageFetch = 0;
 	let refreshing = false;
 	let renderChain: Promise<void> = Promise.resolve();
+	let lastRenderedLine: string | null = null;
+	let renderAbort: AbortController | undefined;
 	const warn = (msg: string) => {
 		try {
 			cmd.ui.notify(`[cmd-statusline] ${msg}`);
@@ -182,7 +184,7 @@ export default function (cmd: ModApi): void {
 		}
 	}
 
-	async function render(): Promise<void> {
+	async function render(signal?: AbortSignal): Promise<void> {
 		const cwd = (cmd.cwd || '').split(/[\\/]/).filter(Boolean).pop() || cmd.cwd || '';
 
 		await renderStatus(
@@ -198,17 +200,30 @@ export default function (cmd: ModApi): void {
 				usage,
 			},
 			{
-				exec: (args) => cmd.exec(args),
+				exec: (args) => cmd.exec({ ...args, signal }),
 				readTitle: readTitleFromDisk,
-				setStatus: (line) => cmd.ui.setStatus(line),
+				signal,
+				setStatus: (line) => {
+					if (line === lastRenderedLine) return;
+					lastRenderedLine = line;
+					cmd.ui.setStatus(line);
+				},
 			},
 		);
 	}
 
+	// Debounced render: coalesces rapid requests into one trailing call, and
+	// aborts any in-flight git subprocess before starting a new one.
+	const debouncedRender = debounce(() => {
+		renderAbort?.abort();
+		renderAbort = new AbortController();
+		renderChain = renderChain.then(() => render(renderAbort?.signal)).catch(() => {});
+	}, 300);
+
 	// Single-flight: every render request chains through one promise so a
 	// slower older render can never overwrite a newer one.
 	function enqueueRender(): void {
-		renderChain = renderChain.then(render).catch(() => {});
+		debouncedRender();
 	}
 
 	// Single entry point that gathers everything, then renders once.
@@ -275,7 +290,10 @@ export default function (cmd: ModApi): void {
 			void fullRefresh();
 		},
 		onSessionEnd: () => {
+			debouncedRender.cancel();
+			renderAbort?.abort();
 			cmd.ui.setStatus(null);
+			lastRenderedLine = null;
 			if (interval) clearInterval(interval);
 		},
 	});

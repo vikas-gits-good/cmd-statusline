@@ -1,15 +1,17 @@
-import {test, expect} from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
-test.beforeEach(async ({page}) => {
+test.beforeEach(async ({ page }) => {
 	await page.goto('http://localhost:4321/');
 });
 
 async function render(page, scenario) {
-	await page.evaluate(s => { window.renderStatus(s); }, scenario);
+	await page.evaluate((s) => {
+		window.renderStatus(s);
+	}, scenario);
 }
 
 // currentTokens/contextLimit drive cntx. 1M context, so 130% cap needs 1.3M tokens.
-test('renders a complete status line with all fields', async ({page}) => {
+test('renders a complete status line with all fields', async ({ page }) => {
 	await render(page, {
 		cwd: 'my-project',
 		branch: 'main',
@@ -38,7 +40,7 @@ test('renders a complete status line with all fields', async ({page}) => {
 	await expect(page.getByTestId('crdt')).toHaveText('11.56');
 });
 
-test('shows no session name for a new session', async ({page}) => {
+test('shows no session name for a new session', async ({ page }) => {
 	await render(page, {
 		cwd: 'my-project',
 		branch: 'main',
@@ -58,7 +60,7 @@ test('shows no session name for a new session', async ({page}) => {
 	await expect(page.getByTestId('session-name')).toHaveText('');
 });
 
-test('marks dirty state via git dot', async ({page}) => {
+test('marks dirty state via git dot', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',
@@ -77,7 +79,7 @@ test('marks dirty state via git dot', async ({page}) => {
 	await expect(page.getByTestId('dirty')).toHaveText('dirty');
 });
 
-test('caps context usage display at 100%', async ({page}) => {
+test('caps context usage display at 100%', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',
@@ -98,7 +100,7 @@ test('caps context usage display at 100%', async ({page}) => {
 	await expect(page.getByTestId('wkly')).toHaveText('100');
 });
 
-test('colors credits red below 10% remaining', async ({page}) => {
+test('colors credits red below 10% remaining', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',
@@ -116,7 +118,7 @@ test('colors credits red below 10% remaining', async ({page}) => {
 	expect(raw).toContain('crdt: \u001b[31m$0.50\u001b[0m');
 });
 
-test('colors credits orange at 10-24% remaining', async ({page}) => {
+test('colors credits orange at 10-24% remaining', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',
@@ -134,7 +136,7 @@ test('colors credits orange at 10-24% remaining', async ({page}) => {
 	expect(raw).toContain('crdt: \u001b[38;5;208m$7.00\u001b[0m');
 });
 
-test('colors credits green when healthy', async ({page}) => {
+test('colors credits green when healthy', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',
@@ -152,7 +154,7 @@ test('colors credits green when healthy', async ({page}) => {
 	expect(raw).toContain('crdt: \u001b[32m$29.00\u001b[0m');
 });
 
-test('handles unknown model gracefully (no crash, no context)', async ({page}) => {
+test('handles unknown model gracefully (no crash, no context)', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',
@@ -170,7 +172,7 @@ test('handles unknown model gracefully (no crash, no context)', async ({page}) =
 	await expect(page.getByTestId('cntx')).toHaveText('0');
 });
 
-test('handles missing usage data (internal server error scenario)', async ({page}) => {
+test('handles missing usage data (internal server error scenario)', async ({ page }) => {
 	await render(page, {
 		cwd: 'repo',
 		branch: 'main',

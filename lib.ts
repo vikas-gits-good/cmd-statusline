@@ -136,7 +136,7 @@ export function colorUsage(n: number): string {
 // Single source of truth for money formatting (used by both colorCredits and
 // computeStatus so the two can never drift).
 export function formatMoney(n: number): string {
-	return n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+	return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // Credits buckets: higher = better. ≥50 green, 25-49 yellow, 10-24 orange, <10 red.
@@ -164,12 +164,30 @@ export function shortModelName(full: string): string {
 // provider prefix (e.g. "deepseek-v4-pro" → "deepseek/deepseek-v4-pro").
 // Matching is case-insensitive as a fallback because the CLI's --list-models
 // lowercases some slugs while the context-window map preserves originals.
-export function resolveContextWindow(modelId: string, windows: Record<string, number> = CONTEXT_WINDOWS): number | undefined {
+export function resolveContextWindow(
+	modelId: string,
+	windows: Record<string, number> = CONTEXT_WINDOWS,
+): number | undefined {
 	if (!modelId) return undefined;
 	const short = shortModelName(modelId);
 	// Try exact, then short, then a few common provider prefixes for short names.
 	const candidates = [modelId, short];
-	for (const prefix of ['deepseek/', 'anthropic/', 'openai/', 'google/', 'xai/', 'meta/', 'sakana/', 'nvidia/', 'poolside/', 'stepfun/', 'tencent/', 'xiaomi/', 'minimax/', 'moonshotai/']) {
+	for (const prefix of [
+		'deepseek/',
+		'anthropic/',
+		'openai/',
+		'google/',
+		'xai/',
+		'meta/',
+		'sakana/',
+		'nvidia/',
+		'poolside/',
+		'stepfun/',
+		'tencent/',
+		'xiaomi/',
+		'minimax/',
+		'moonshotai/',
+	]) {
 		if (!short.includes('/')) candidates.push(`${prefix}${short}`);
 	}
 	for (const c of candidates) {
@@ -182,7 +200,8 @@ export function resolveContextWindow(modelId: string, windows: Record<string, nu
 	}
 	const shortLower = short.toLowerCase();
 	for (const key of Object.keys(windows)) {
-		if (key.toLowerCase().endsWith(`/${shortLower}`) || key.toLowerCase() === shortLower) return windows[key];
+		if (key.toLowerCase().endsWith(`/${shortLower}`) || key.toLowerCase() === shortLower)
+			return windows[key];
 	}
 	return undefined;
 }
@@ -274,24 +293,28 @@ export function buildStatusLine(s: StatusState, maxWidth?: number): string {
 
 	// Each field is atomic: whole, ellipsized, or absent — never split.
 	// priority order = left-to-right display order; higher = more important.
-	type Field = {text: string; priority: number; droppable: boolean};
+	type Field = { text: string; priority: number; droppable: boolean };
 	const fields: Field[] = [
-		{text: seg.cwd, priority: 100, droppable: false},          // identity, never drop
+		{ text: seg.cwd, priority: 100, droppable: false }, // identity, never drop
 	];
-	if (seg.branch) fields.push({text: `${seg.branch} ${dot}`, priority: 90, droppable: false});
-	if (seg.sessionName) fields.push({text: seg.sessionName, priority: 80, droppable: true});
+	if (seg.branch) fields.push({ text: `${seg.branch} ${dot}`, priority: 90, droppable: false });
+	if (seg.sessionName) fields.push({ text: seg.sessionName, priority: 80, droppable: true });
 	fields.push(
-		{text: DIM + '│' + RESET, priority: 70, droppable: false}, // separator
-		{text: shortModel, priority: 60, droppable: false},
-		{text: seg.effort, priority: 50, droppable: true},
-		{text: `cntx: ${cntxText}`, priority: 40, droppable: false},
+		{ text: DIM + '│' + RESET, priority: 70, droppable: false }, // separator
+		{ text: shortModel, priority: 60, droppable: false },
+		{ text: seg.effort, priority: 50, droppable: true },
+		{ text: `cntx: ${cntxText}`, priority: 40, droppable: false },
 	);
 	if (s.usage) {
 		fields.push(
-			{text: `usge: ${colorUsage(seg.usge ?? 0)}`, priority: 30, droppable: true},
-			{text: `wkly: ${colorUsage(seg.wkly ?? 0)}`, priority: 20, droppable: true},
-			{text: `totl: ${colorUsage(seg.totl ?? 0)}`, priority: 10, droppable: true},
-			{text: `crdt: ${colorCredits(s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits, s.usage.planId)}`, priority: 5, droppable: true},
+			{ text: `usge: ${colorUsage(seg.usge ?? 0)}`, priority: 30, droppable: true },
+			{ text: `wkly: ${colorUsage(seg.wkly ?? 0)}`, priority: 20, droppable: true },
+			{ text: `totl: ${colorUsage(seg.totl ?? 0)}`, priority: 10, droppable: true },
+			{
+				text: `crdt: ${colorCredits(s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits, s.usage.planId)}`,
+				priority: 5,
+				droppable: true,
+			},
 		);
 	}
 
@@ -322,43 +345,41 @@ export function buildStatusLine(s: StatusState, maxWidth?: number): string {
 	if (fits(line)) return line;
 
 	// Drop droppable fields from lowest priority upward.
-	const droppable = kept
-		.filter(f => f.droppable)
-		.sort((a, b) => a.priority - b.priority);
+	const droppable = kept.filter((f) => f.droppable).sort((a, b) => a.priority - b.priority);
 	for (const drop of droppable) {
-		kept = kept.filter(f => f !== drop);
+		kept = kept.filter((f) => f !== drop);
 		line = join(kept);
 		if (fits(line)) return line;
 	}
 
 	// Still too wide: ellipsize the single widest non-droppable field so the
-	// whole line fits on one line without a partial cut.
+	// whole line fits on one line without a partial cut. At this point maxWidth
+	// is guaranteed to be defined (the earlier fits() already returned for
+	// undefined) and the line is still too wide.
 	line = join(kept);
 	const visible = stripAnsi(line);
-	if (maxWidth !== undefined && visible.length > maxWidth) {
-		// Reduce the widest field until it fits.
-		let budget = maxWidth;
-		const nonDrop = kept.filter(f => !f.droppable);
-		// Separator consumes a fixed width; subtract it.
-		const sep = kept.find(f => f.priority === 70);
-		const sepWidth = sep ? stripAnsi(`  ${sep.text}  `).length : 0;
-		const sepIdx = kept.indexOf(sep!);
-		const before = kept.slice(0, sepIdx);
-		const after = kept.slice(sepIdx + 1);
-		const beforeWidth = stripAnsi(join(before)).length;
-		const afterWidth = stripAnsi(join(after)).length;
-		const available = Math.max(1, budget - beforeWidth - afterWidth - sepWidth);
-		// Ellipsize the widest field in `before` (cwd/branch).
-		let target = before.reduce((a, b) => (stripAnsi(b.text).length > stripAnsi(a.text).length ? b : a), before[0]);
-		if (target) {
-			const idx = kept.indexOf(target);
-			const ell = ellipsize(target.text, available);
-			const rebuilt = join([...kept.slice(0, idx), {...target, text: ell}, ...kept.slice(idx + 1)]);
-			if (fits(rebuilt)) return rebuilt;
-		}
-		// Fallback: return the leftmost identity ellipsized to the budget.
-		return ellipsize(seg.cwd, maxWidth);
-	}
+	if (visible.length <= maxWidth!) return line;
 
-	return line;
+	// Separator consumes a fixed width; subtract it.
+	const sep = kept.find((f) => f.priority === 70);
+	const sepWidth = sep ? stripAnsi(`  ${sep.text}  `).length : 0;
+	const sepIdx = kept.indexOf(sep!);
+	const before = kept.slice(0, sepIdx);
+	const after = kept.slice(sepIdx + 1);
+	const beforeWidth = stripAnsi(join(before)).length;
+	const afterWidth = stripAnsi(join(after)).length;
+	const available = Math.max(1, maxWidth! - beforeWidth - afterWidth - sepWidth);
+	// Ellipsize the widest field in `before` (cwd/branch).
+	const target = before.reduce(
+		(a, b) => (stripAnsi(b.text).length > stripAnsi(a.text).length ? b : a),
+		before[0],
+	);
+	if (target) {
+		const idx = kept.indexOf(target);
+		const ell = ellipsize(target.text, available);
+		const rebuilt = join([...kept.slice(0, idx), { ...target, text: ell }, ...kept.slice(idx + 1)]);
+		if (fits(rebuilt)) return rebuilt;
+	}
+	// Fallback: return the leftmost identity ellipsized to the budget.
+	return ellipsize(seg.cwd, maxWidth!);
 }

@@ -1,7 +1,7 @@
-import {describe, it, expect} from 'vitest';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
-import {CONTEXT_WINDOWS, resolveContextWindow, shortModelName, buildStatusLine, type StatusState} from './lib';
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CONTEXT_WINDOWS, resolveContextWindow, buildStatusLine, type StatusState } from './lib';
 
 // The authoritative context-window map synced from the installed CLI.
 const windows: Record<string, number> = JSON.parse(
@@ -30,20 +30,22 @@ describe('every model in the synced context-window map', () => {
 		expect(Object.keys(CONTEXT_WINDOWS).sort()).toEqual(modelIds.sort());
 	});
 
-	it.each(modelIds)('resolves a context window for %s', id => {
+	it.each(modelIds)('resolves a context window for %s', (id) => {
 		const w = resolveContextWindow(id);
 		expect(w).toBe(windows[id]);
 		expect(w).toBeGreaterThan(0);
 	});
 
-	it.each(modelIds)('renders %s with a non-zero context', id => {
+	it.each(modelIds)('renders %s with a non-zero context', (id) => {
 		const limit = windows[id];
-		const line = buildStatusLine(baseState({model: id, currentTokens: limit / 2, contextLimit: limit}));
+		const line = buildStatusLine(
+			baseState({ model: id, currentTokens: limit / 2, contextLimit: limit }),
+		);
 		expect(line).toContain('cntx: \u001b[33m50%\u001b[0m');
 	});
 
-	it.each(modelIds)('renders %s with zero context tokens', id => {
-		const line = buildStatusLine(baseState({model: id, contextLimit: windows[id]}));
+	it.each(modelIds)('renders %s with zero context tokens', (id) => {
+		const line = buildStatusLine(baseState({ model: id, contextLimit: windows[id] }));
 		expect(line).toContain('cntx: \u001b[32m0%\u001b[0m');
 	});
 });

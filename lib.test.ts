@@ -1,4 +1,4 @@
-import {describe, it, expect} from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
 	PLAN_CREDITS,
 	CONTEXT_WINDOWS,
@@ -69,12 +69,14 @@ describe('colorCredits across all plans', () => {
 		expect(plans.length).toBeGreaterThanOrEqual(8);
 	});
 
-	it.each(plans)('color-codes %s correctly at boundaries', planId => {
+	it.each(plans)('color-codes %s correctly at boundaries', (planId) => {
 		const total = PLAN_CREDITS[planId];
 		const fmt = (remaining: number) => colorCredits(remaining, planId);
 
 		// ≥50% green
-		expect(fmt(total)).toBe(`${GREEN}$${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\x1b[0m`);
+		expect(fmt(total)).toBe(
+			`${GREEN}$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\x1b[0m`,
+		);
 		// 25-49% yellow
 		const y = total * 0.3;
 		expect(fmt(y).includes(YELLOW)).toBe(true);
@@ -87,7 +89,9 @@ describe('colorCredits across all plans', () => {
 	});
 
 	it('treats an unknown plan as fully remaining (green)', () => {
-		expect(colorCredits(12, 'individual-unknown')).toBe(`${GREEN}$${(12).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\x1b[0m`);
+		expect(colorCredits(12, 'individual-unknown')).toBe(
+			`${GREEN}$${(12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\x1b[0m`,
+		);
 	});
 });
 
@@ -106,15 +110,20 @@ describe('cyclePct', () => {
 	});
 
 	it('returns 0 when total spent is 0', () => {
-		expect(cyclePct(usage({totalSpent: 0}))).toBe(0);
+		expect(cyclePct(usage({ totalSpent: 0 }))).toBe(0);
 	});
 	it('computes against plan pool plus purchased/free', () => {
 		// pro-v1 = 80 base, + 20 purchased = 100 pool; 50 spent = 50%
-		const u = usage({planId: 'individual-pro-v1', monthlyCredits: 80, purchasedCredits: 20, totalSpent: 50});
+		const u = usage({
+			planId: 'individual-pro-v1',
+			monthlyCredits: 80,
+			purchasedCredits: 20,
+			totalSpent: 50,
+		});
 		expect(cyclePct(u)).toBe(50);
 	});
 	it('caps at 100 when fully consumed', () => {
-		const u = usage({planId: 'individual-go', monthlyCredits: 10, totalSpent: 999});
+		const u = usage({ planId: 'individual-go', monthlyCredits: 10, totalSpent: 999 });
 		expect(cyclePct(u)).toBe(100);
 	});
 });

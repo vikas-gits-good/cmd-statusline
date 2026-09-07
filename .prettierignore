@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.private/
+e2e/lib.browser.js
+e2e/context-windows.json
+e2e/models.list.json
+e2e/plans.list.json
+e2e/harness.html

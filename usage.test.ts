@@ -1,5 +1,8 @@
-import {describe, it, expect} from 'vitest';
-import {readAuthKey, fetchUsage, API_BASE, CLIENT_VERSION} from './usage';
+import { describe, it, expect } from 'vitest';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { readAuthKey, fetchUsage, API_BASE, CLIENT_VERSION } from './usage';
 
 function jsonRes(body: unknown, ok = true, status = 200): Response {
 	return {
@@ -12,39 +15,94 @@ function jsonRes(body: unknown, ok = true, status = 200): Response {
 
 describe('readAuthKey', () => {
 	it('returns the env var when set', async () => {
-		expect(await readAuthKey({env: {COMMAND_CODE_API_KEY: 'abc123'}})).toBe('abc123');
+		expect(await readAuthKey({ env: { COMMAND_CODE_API_KEY: 'abc123' } })).toBe('abc123');
 	});
 
 	it('returns null when no env var and no auth file', async () => {
-		expect(await readAuthKey({env: {}, homeDir: '/nonexistent', readFile: async () => { throw new Error('ENOENT'); }})).toBeNull();
+		expect(
+			await readAuthKey({
+				env: {},
+				homeDir: '/nonexistent',
+				readFile: async () => {
+					throw new Error('ENOENT');
+				},
+			}),
+		).toBeNull();
 	});
 
 	it('returns the key from auth.json', async () => {
 		const key = await readAuthKey({
 			env: {},
 			homeDir: '/home/u',
-			readFile: async () => JSON.stringify({apiKey: 'file-key'}),
+			readFile: async () => JSON.stringify({ apiKey: 'file-key' }),
 		});
 		expect(key).toBe('file-key');
 	});
 
 	it('returns null for malformed auth.json', async () => {
-		expect(await readAuthKey({env: {}, homeDir: '/home/u', readFile: async () => 'not json'})).toBeNull();
+		expect(
+			await readAuthKey({ env: {}, homeDir: '/home/u', readFile: async () => 'not json' }),
+		).toBeNull();
+	});
+
+	it('returns null when auth.json has no apiKey field', async () => {
+		expect(
+			await readAuthKey({ env: {}, homeDir: '/home/u', readFile: async () => '{}' }),
+		).toBeNull();
+	});
+
+	it('reads the real auth.json when readFile is not injected', async () => {
+		const home = await mkdtemp(join(tmpdir(), 'cmd-statusline-test-'));
+		await mkdir(join(home, '.commandcode'), { recursive: true });
+		await writeFile(
+			join(home, '.commandcode', 'auth.json'),
+			JSON.stringify({ apiKey: 'real-key' }),
+		);
+		const key = await readAuthKey({ env: {}, homeDir: home });
+		expect(key).toBe('real-key');
+	});
+
+	it('falls back to process.env when env is not injected', async () => {
+		const prev = process.env.COMMAND_CODE_API_KEY;
+		process.env.COMMAND_CODE_API_KEY = 'from-process-env';
+		try {
+			expect(await readAuthKey({})).toBe('from-process-env');
+		} finally {
+			process.env.COMMAND_CODE_API_KEY = prev;
+		}
+	});
+
+	it('falls back to os.homedir when homeDir is not injected', async () => {
+		// No homeDir, no env key, but readFile injected → hits os.homedir()
+		// fallback at line 24 without touching the real filesystem.
+		const key = await readAuthKey({
+			env: {},
+			readFile: async () => '{}',
+		});
+		expect(key).toBeNull();
 	});
 });
 
 describe('fetchUsage', () => {
 	it('returns null when no auth key', async () => {
-		expect(await fetchUsage({env: {}, homeDir: '/nonexistent', readFile: async () => { throw new Error('x'); }})).toBeNull();
+		expect(
+			await fetchUsage({
+				env: {},
+				homeDir: '/nonexistent',
+				readFile: async () => {
+					throw new Error('x');
+				},
+			}),
+		).toBeNull();
 	});
 
 	it('returns parsed usage from healthy API responses', async () => {
 		const credits = {
-			credits: {monthlyCredits: 30, purchasedCredits: 0, freeCredits: 0},
-			windowLimits: {fiveHour: {used: 5, cap: 16}, weekly: {used: 20, cap: 40}},
+			credits: { monthlyCredits: 30, purchasedCredits: 0, freeCredits: 0 },
+			windowLimits: { fiveHour: { used: 5, cap: 16 }, weekly: { used: 20, cap: 40 } },
 		};
-		const sub = {data: {planId: 'individual-pro', currentPeriodStart: '2026-01-01'}};
-		const summary = {totalCost: 15};
+		const sub = { data: { planId: 'individual-pro', currentPeriodStart: '2026-01-01' } };
+		const summary = { totalCost: 15 };
 		const calls: string[] = [];
 		const fetchFn = async (url: string) => {
 			calls.push(url);
@@ -53,7 +111,10 @@ describe('fetchUsage', () => {
 			if (url.includes('/summary')) return jsonRes(summary);
 			throw new Error('unexpected ' + url);
 		};
-		const u = await fetchUsage({env: {COMMAND_CODE_API_KEY: 'k'}, fetchFn: fetchFn as typeof fetch});
+		const u = await fetchUsage({
+			env: { COMMAND_CODE_API_KEY: 'k' },
+			fetchFn: fetchFn as typeof fetch,
+		});
 		expect(u).toEqual({
 			planId: 'individual-pro',
 			fiveHourUsed: 5,
@@ -70,26 +131,37 @@ describe('fetchUsage', () => {
 
 	it('throws on a non-OK (500) response', async () => {
 		const fetchFn = async () => jsonRes({}, false, 500);
-		await expect(fetchUsage({env: {COMMAND_CODE_API_KEY: 'k'}, fetchFn: fetchFn as typeof fetch})).rejects.toThrow('500');
+		await expect(
+			fetchUsage({ env: { COMMAND_CODE_API_KEY: 'k' }, fetchFn: fetchFn as typeof fetch }),
+		).rejects.toThrow('500');
 	});
 
 	it('throws on a 401 response (expired key)', async () => {
 		const fetchFn = async () => jsonRes({}, false, 401);
-		await expect(fetchUsage({env: {COMMAND_CODE_API_KEY: 'k'}, fetchFn: fetchFn as typeof fetch})).rejects.toThrow('401');
+		await expect(
+			fetchUsage({ env: { COMMAND_CODE_API_KEY: 'k' }, fetchFn: fetchFn as typeof fetch }),
+		).rejects.toThrow('401');
 	});
 
 	it('throws on network failure', async () => {
-		const fetchFn = async () => { throw new Error('network down'); };
-		await expect(fetchUsage({env: {COMMAND_CODE_API_KEY: 'k'}, fetchFn: fetchFn as typeof fetch})).rejects.toThrow('network down');
+		const fetchFn = async () => {
+			throw new Error('network down');
+		};
+		await expect(
+			fetchUsage({ env: { COMMAND_CODE_API_KEY: 'k' }, fetchFn: fetchFn as typeof fetch }),
+		).rejects.toThrow('network down');
 	});
 
 	it('defaults missing usage fields to 0', async () => {
 		const fetchFn = async (url: string) => {
-			if (url.includes('/credits')) return jsonRes({credits: {}, windowLimits: {}});
+			if (url.includes('/credits')) return jsonRes({ credits: {}, windowLimits: {} });
 			if (url.includes('/subscriptions')) return jsonRes({});
 			return jsonRes({});
 		};
-		const u = await fetchUsage({env: {COMMAND_CODE_API_KEY: 'k'}, fetchFn: fetchFn as typeof fetch});
+		const u = await fetchUsage({
+			env: { COMMAND_CODE_API_KEY: 'k' },
+			fetchFn: fetchFn as typeof fetch,
+		});
 		expect(u?.fiveHourUsed).toBe(0);
 		expect(u?.totalSpent).toBe(0);
 		expect(u?.planId).toBe('');
@@ -99,11 +171,26 @@ describe('fetchUsage', () => {
 		let capturedHeaders: Record<string, string> | undefined;
 		const fetchSeq = async (url: string, init?: RequestInit) => {
 			capturedHeaders = init?.headers as Record<string, string>;
-			if (url.includes('/credits')) return jsonRes({credits: {}, windowLimits: {}});
+			if (url.includes('/credits')) return jsonRes({ credits: {}, windowLimits: {} });
 			if (url.includes('/subscriptions')) return jsonRes({});
 			return jsonRes({});
 		};
-		await fetchUsage({env: {COMMAND_CODE_API_KEY: 'k'}, fetchFn: fetchSeq as typeof fetch});
+		await fetchUsage({ env: { COMMAND_CODE_API_KEY: 'k' }, fetchFn: fetchSeq as typeof fetch });
 		expect(capturedHeaders?.['x-command-code-version']).toBe(CLIENT_VERSION);
+	});
+
+	it('falls back to global fetch when fetchFn is not injected', async () => {
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async (url: string) => {
+			if (String(url).includes('/credits')) return jsonRes({ credits: {}, windowLimits: {} });
+			if (String(url).includes('/subscriptions')) return jsonRes({});
+			return jsonRes({});
+		}) as typeof fetch;
+		try {
+			const u = await fetchUsage({ env: { COMMAND_CODE_API_KEY: 'k' } });
+			expect(u?.planId).toBe('');
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 });

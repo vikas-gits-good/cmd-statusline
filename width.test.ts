@@ -1,5 +1,5 @@
-import {describe, it, expect} from 'vitest';
-import {buildStatusLine, stripAnsi, type StatusState} from './lib';
+import { describe, it, expect } from 'vitest';
+import { buildStatusLine, stripAnsi, type StatusState } from './lib';
 
 function state(overrides: Partial<StatusState> = {}): StatusState {
 	return {
@@ -52,7 +52,7 @@ describe('buildStatusLine width budget', () => {
 	});
 
 	it('drops the rightmost field (crdt) first when too narrow', () => {
-		const base = state({sessionName: ''}); // no session name, so only right fields drop
+		const base = state({ sessionName: '' }); // no session name, so only right fields drop
 		const full = buildStatusLine(base);
 		const fullLen = stripAnsi(full).length;
 		// crdt segment is exactly 14 visible chars; trim that much so crdt drops
@@ -64,7 +64,7 @@ describe('buildStatusLine width budget', () => {
 	});
 
 	it('drops crdt then totl then wkly as width shrinks', () => {
-		const base = state({sessionName: ''});
+		const base = state({ sessionName: '' });
 		const full = buildStatusLine(base);
 		const fullLen = stripAnsi(full).length;
 		// crdt (14) + totl (11) = 25; trim that much so both drop but wkly stays.
@@ -82,8 +82,11 @@ describe('buildStatusLine width budget', () => {
 	});
 
 	it('keeps session name whole while dropping low-priority usage fields', () => {
-		const full = buildStatusLine(state({sessionName: 'A very long session title'}));
-		const line = buildStatusLine(state({sessionName: 'A very long session title'}), stripAnsi(full).length - 30);
+		const full = buildStatusLine(state({ sessionName: 'A very long session title' }));
+		const line = buildStatusLine(
+			state({ sessionName: 'A very long session title' }),
+			stripAnsi(full).length - 30,
+		);
 		// Usage fields (crdt/totl/wkly) drop first; session name stays whole.
 		expect(line).toContain('A very long session title');
 		expect(line).toContain('deepseek-v4-pro');
@@ -116,27 +119,32 @@ describe('whole-field integrity (no partial cuts)', () => {
 	};
 
 	it('cwd: whole, ellipsized, or absent (never mid-cut)', () => {
-		const line = stripAnsi(buildStatusLine(state({cwd: longCwd, sessionName: ''}), 25));
+		const line = stripAnsi(buildStatusLine(state({ cwd: longCwd, sessionName: '' }), 25));
 		assertWholeOrEllipsized(line, longCwd, longCwd.slice(0, 15));
 	});
 
 	it('branch: whole, ellipsized, or absent (never mid-cut)', () => {
-		const line = stripAnsi(buildStatusLine(state({branch: longBranch, sessionName: ''}), 25));
+		const line = stripAnsi(buildStatusLine(state({ branch: longBranch, sessionName: '' }), 25));
 		assertWholeOrEllipsized(line, longBranch, longBranch.slice(0, 12));
 	});
 
 	it('session name: whole, ellipsized, or absent (never mid-cut)', () => {
-		const line = stripAnsi(buildStatusLine(state({sessionName: longSession}), 40));
+		const line = stripAnsi(buildStatusLine(state({ sessionName: longSession }), 40));
 		assertWholeOrEllipsized(line, longSession, longSession.slice(0, 12));
 	});
 
 	it('model name: whole, ellipsized, or absent (never mid-cut)', () => {
-		const line = stripAnsi(buildStatusLine(state({model: longModel, sessionName: ''}), 40));
+		const line = stripAnsi(buildStatusLine(state({ model: longModel, sessionName: '' }), 40));
 		assertWholeOrEllipsized(line, longModel, longModel.slice(0, 12));
 	});
 
 	it('all four long fields together fit within budget without wrapping', () => {
-		const s = state({cwd: longCwd, branch: longBranch, sessionName: longSession, model: longModel});
+		const s = state({
+			cwd: longCwd,
+			branch: longBranch,
+			sessionName: longSession,
+			model: longModel,
+		});
 		const line = stripAnsi(buildStatusLine(s, 200));
 		expect(line).not.toContain('\n');
 		expect(line.length).toBeLessThanOrEqual(200);

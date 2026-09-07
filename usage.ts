@@ -1,6 +1,6 @@
 // I/O helpers for the status line, extracted from index.ts so their error
 // paths are unit-testable with injected fetch/env/fs dependencies.
-import type {Usage} from './lib';
+import type { Usage } from './lib';
 
 export const API_BASE = 'https://api.commandcode.ai';
 export const CLIENT_VERSION = '1.50.0';
@@ -19,15 +19,14 @@ export async function readAuthKey(deps: UsageDeps = {}): Promise<string | null> 
 	if (fromEnv) return fromEnv;
 
 	try {
-		const fs = deps.readFile
-			? {readFile: deps.readFile}
-			: await import('node:fs/promises');
 		const os = await import('node:os');
 		const path = await import('node:path');
 		const home = deps.homeDir ?? os.homedir();
 		const p = path.join(home, '.commandcode', 'auth.json');
-		const raw = await fs.readFile(p);
-		const parsed = JSON.parse(raw) as {apiKey?: string};
+		const raw = deps.readFile
+			? await deps.readFile(p)
+			: await (await import('node:fs/promises')).readFile(p, 'utf8');
+		const parsed = JSON.parse(raw) as { apiKey?: string };
 		return parsed.apiKey ?? null;
 	} catch {
 		return null;
@@ -48,26 +47,32 @@ export async function fetchUsage(deps: UsageDeps = {}): Promise<Usage | null> {
 	};
 
 	const fetchJson = async (url: string) => {
-		const res = await fetchFn(url, {headers, signal: AbortSignal.timeout(USAGE_FETCH_TIMEOUT_MS)});
+		const res = await fetchFn(url, {
+			headers,
+			signal: AbortSignal.timeout(USAGE_FETCH_TIMEOUT_MS),
+		});
 		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 		return res.json();
 	};
 
-	const [creditsJson, subJson] = await Promise.all([
+	const [creditsJson, subJson] = (await Promise.all([
 		fetchJson(`${API_BASE}/alpha/billing/credits`),
 		fetchJson(`${API_BASE}/alpha/billing/subscriptions`),
-	]) as [
+	])) as [
 		{
-			credits: {monthlyCredits?: number; purchasedCredits?: number; freeCredits?: number};
-			windowLimits: {fiveHour?: {used?: number; cap?: number}; weekly?: {used?: number; cap?: number}};
+			credits: { monthlyCredits?: number; purchasedCredits?: number; freeCredits?: number };
+			windowLimits: {
+				fiveHour?: { used?: number; cap?: number };
+				weekly?: { used?: number; cap?: number };
+			};
 		},
-		{data?: {planId?: string; currentPeriodStart?: string}},
+		{ data?: { planId?: string; currentPeriodStart?: string } },
 	];
 
 	const planId = subJson.data?.planId ?? '';
 	const since = subJson.data?.currentPeriodStart ?? undefined;
 	const summaryPath = `${API_BASE}/alpha/usage/summary${since ? `?since=${encodeURIComponent(since)}` : ''}`;
-	const summaryJson = (await fetchJson(summaryPath)) as {totalCost?: number};
+	const summaryJson = (await fetchJson(summaryPath)) as { totalCost?: number };
 
 	return {
 		planId,

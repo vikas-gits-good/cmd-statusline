@@ -1,7 +1,7 @@
-import {createServer} from 'node:http';
-import {readFile} from 'node:fs/promises';
-import {join, extname} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const types = {
@@ -15,7 +15,7 @@ const server = createServer(async (req, res) => {
 		const url = new URL(req.url, 'http://localhost');
 		const file = url.pathname === '/' ? '/e2e/harness.html' : url.pathname;
 		const data = await readFile(join(root, file));
-		res.writeHead(200, {'Content-Type': types[extname(file)] ?? 'text/plain'});
+		res.writeHead(200, { 'Content-Type': types[extname(file)] ?? 'text/plain' });
 		res.end(data);
 	} catch {
 		res.writeHead(404);

@@ -36,3 +36,7 @@ The E2E suite auto-syncs the live model list and plan credits from `cmd` before 
 ## License
 
 MIT
+
+---
+
+Built with [Command Code](https://commandcode.ai).

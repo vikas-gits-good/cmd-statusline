@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  unit:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,17 +16,37 @@ jobs:
       - run: npm ci
         env:
           NODE_ENV: development
-      - run: npm run test:unit
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (ESLint)
+        run: npm run lint
+      - name: Format check (Prettier)
+        run: npm run format:check
+      - name: Unit tests + coverage
+        run: npm run test:unit
+      - name: Install Playwright browsers (headless shell only)
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: E2E tests
+        run: npm run test:e2e
 
-  e2e:
-    runs-on: ubuntu-latest
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci
-        env:
-          NODE_ENV: development
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Install Command Code CLI
+        run: npm install -g command-code
+      - name: Verify CLI
+        run: cmd --version
+      - name: Install the mod (user scope)
+        run: cmd mods add ${{ github.repository }} -g
+      - name: Verify mod loads with no warnings
+        run: cmd mods list
+      - name: Smoke-load the mod file directly
+        run: cmd --mod ./index.ts --version

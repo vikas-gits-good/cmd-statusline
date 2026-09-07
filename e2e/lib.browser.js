@@ -128,7 +128,22 @@ function resolveContextWindow(modelId, windows = CONTEXT_WINDOWS) {
   if (!modelId) return void 0;
   const short = shortModelName(modelId);
   const candidates = [modelId, short];
-  for (const prefix of ["deepseek/", "anthropic/", "openai/", "google/", "xai/", "meta/", "sakana/", "nvidia/", "poolside/", "stepfun/", "tencent/", "xiaomi/", "minimax/", "moonshotai/"]) {
+  for (const prefix of [
+    "deepseek/",
+    "anthropic/",
+    "openai/",
+    "google/",
+    "xai/",
+    "meta/",
+    "sakana/",
+    "nvidia/",
+    "poolside/",
+    "stepfun/",
+    "tencent/",
+    "xiaomi/",
+    "minimax/",
+    "moonshotai/"
+  ]) {
     if (!short.includes("/")) candidates.push(`${prefix}${short}`);
   }
   for (const c of candidates) {
@@ -140,7 +155,8 @@ function resolveContextWindow(modelId, windows = CONTEXT_WINDOWS) {
   }
   const shortLower = short.toLowerCase();
   for (const key of Object.keys(windows)) {
-    if (key.toLowerCase().endsWith(`/${shortLower}`) || key.toLowerCase() === shortLower) return windows[key];
+    if (key.toLowerCase().endsWith(`/${shortLower}`) || key.toLowerCase() === shortLower)
+      return windows[key];
   }
   return void 0;
 }
@@ -200,7 +216,11 @@ function buildStatusLine(s, maxWidth) {
       { text: `usge: ${colorUsage(seg.usge ?? 0)}`, priority: 30, droppable: true },
       { text: `wkly: ${colorUsage(seg.wkly ?? 0)}`, priority: 20, droppable: true },
       { text: `totl: ${colorUsage(seg.totl ?? 0)}`, priority: 10, droppable: true },
-      { text: `crdt: ${colorCredits(s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits, s.usage.planId)}`, priority: 5, droppable: true }
+      {
+        text: `crdt: ${colorCredits(s.usage.monthlyCredits + s.usage.purchasedCredits + s.usage.freeCredits, s.usage.planId)}`,
+        priority: 5,
+        droppable: true
+      }
     );
   }
   const join = (parts) => {
@@ -231,27 +251,26 @@ function buildStatusLine(s, maxWidth) {
   }
   line = join(kept);
   const visible = stripAnsi(line);
-  if (maxWidth !== void 0 && visible.length > maxWidth) {
-    let budget = maxWidth;
-    const nonDrop = kept.filter((f) => !f.droppable);
-    const sep = kept.find((f) => f.priority === 70);
-    const sepWidth = sep ? stripAnsi(`  ${sep.text}  `).length : 0;
-    const sepIdx = kept.indexOf(sep);
-    const before = kept.slice(0, sepIdx);
-    const after = kept.slice(sepIdx + 1);
-    const beforeWidth = stripAnsi(join(before)).length;
-    const afterWidth = stripAnsi(join(after)).length;
-    const available = Math.max(1, budget - beforeWidth - afterWidth - sepWidth);
-    let target = before.reduce((a, b) => stripAnsi(b.text).length > stripAnsi(a.text).length ? b : a, before[0]);
-    if (target) {
-      const idx = kept.indexOf(target);
-      const ell = ellipsize(target.text, available);
-      const rebuilt = join([...kept.slice(0, idx), { ...target, text: ell }, ...kept.slice(idx + 1)]);
-      if (fits(rebuilt)) return rebuilt;
-    }
-    return ellipsize(seg.cwd, maxWidth);
+  if (visible.length <= maxWidth) return line;
+  const sep = kept.find((f) => f.priority === 70);
+  const sepWidth = sep ? stripAnsi(`  ${sep.text}  `).length : 0;
+  const sepIdx = kept.indexOf(sep);
+  const before = kept.slice(0, sepIdx);
+  const after = kept.slice(sepIdx + 1);
+  const beforeWidth = stripAnsi(join(before)).length;
+  const afterWidth = stripAnsi(join(after)).length;
+  const available = Math.max(1, maxWidth - beforeWidth - afterWidth - sepWidth);
+  const target = before.reduce(
+    (a, b) => stripAnsi(b.text).length > stripAnsi(a.text).length ? b : a,
+    before[0]
+  );
+  if (target) {
+    const idx = kept.indexOf(target);
+    const ell = ellipsize(target.text, available);
+    const rebuilt = join([...kept.slice(0, idx), { ...target, text: ell }, ...kept.slice(idx + 1)]);
+    if (fits(rebuilt)) return rebuilt;
   }
-  return line;
+  return ellipsize(seg.cwd, maxWidth);
 }
 export {
   CONTEXT_WINDOWS,

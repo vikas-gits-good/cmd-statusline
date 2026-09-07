@@ -1,9 +1,9 @@
 // cmd-statusline mod.
 // Renders one footer segment (setStatus collapses newlines):
 //   <cwd>, <branch> <dot>, <session-name> │ <model>, <effort> cntx: N%, usge: N%, wkly: N%, totl: N%, crdt: $N
-import type {ModApi} from '@commandcode/harness';
-import {resolveContextWindow, buildStatusLine, type Usage} from './lib';
-import {fetchUsage} from './usage';
+import type { ModApi } from '@commandcode/harness';
+import { resolveContextWindow, buildStatusLine, type Usage } from './lib';
+import { fetchUsage } from './usage';
 
 const USAGE_FETCH_THROTTLE_MS = 30_000;
 const RENDER_INTERVAL_MS = 30_000;
@@ -37,13 +37,19 @@ export default function (cmd: ModApi): void {
 		} catch (err) {
 			// Distinguish auth failure from transient network errors, log one line,
 			// never include the key.
-			const msg = err instanceof Error && /401/.test(err.message) ? 'usage API auth failed' : 'usage API unreachable';
+			const msg =
+				err instanceof Error && /401/.test(err.message)
+					? 'usage API auth failed'
+					: 'usage API unreachable';
 			warn(msg);
 		}
 	}
 
 	// Locate the current session's transcript + meta files on disk.
-	async function locateSessionFiles(): Promise<{metaPath: string; transcriptPath: string} | null> {
+	async function locateSessionFiles(): Promise<{
+		metaPath: string;
+		transcriptPath: string;
+	} | null> {
 		const fs = await import('node:fs/promises');
 		const os = await import('node:os');
 		const path = await import('node:path');
@@ -67,7 +73,7 @@ export default function (cmd: ModApi): void {
 			const metaPath = path.join(projects, d, `${sessionId}.meta.json`);
 			try {
 				await fs.access(metaPath);
-				return {metaPath, transcriptPath: path.join(projects, d, `${sessionId}.jsonl`)};
+				return { metaPath, transcriptPath: path.join(projects, d, `${sessionId}.jsonl`) };
 			} catch {
 				// keep scanning other project dirs
 			}
@@ -100,9 +106,12 @@ export default function (cmd: ModApi): void {
 		const files = await locateSessionFiles();
 		if (!files) return;
 
-		let meta: {title?: string; model?: string};
+		let meta: { title?: string; model?: string };
 		try {
-			meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {title?: string; model?: string};
+			meta = JSON.parse(await fs.readFile(files.metaPath, 'utf8')) as {
+				title?: string;
+				model?: string;
+			};
 		} catch {
 			return;
 		}
@@ -123,7 +132,11 @@ export default function (cmd: ModApi): void {
 		for (let i = lines.length - 1; i >= 0; i--) {
 			const line = lines[i].trim();
 			if (!line) continue;
-			let entry: {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
+			let entry: {
+				model?: string;
+				effort?: string;
+				usage?: { inputTokens?: number; outputTokens?: number };
+			};
 			try {
 				entry = JSON.parse(line);
 			} catch {
@@ -147,9 +160,13 @@ export default function (cmd: ModApi): void {
 		let branch = '';
 		let dirty = false;
 		try {
-			const b = await cmd.exec({command: 'git', args: ['rev-parse', '--abbrev-ref', 'HEAD'], cwd: cmd.cwd});
+			const b = await cmd.exec({
+				command: 'git',
+				args: ['rev-parse', '--abbrev-ref', 'HEAD'],
+				cwd: cmd.cwd,
+			});
 			branch = b.stdout.trim();
-			const s = await cmd.exec({command: 'git', args: ['status', '--porcelain'], cwd: cmd.cwd});
+			const s = await cmd.exec({ command: 'git', args: ['status', '--porcelain'], cwd: cmd.cwd });
 			dirty = s.stdout.trim().length > 0;
 		} catch {
 			// not a git repo
@@ -189,16 +206,20 @@ export default function (cmd: ModApi): void {
 		}
 	}
 
-	cmd.on('model_request_start', e => {
+	cmd.on('model_request_start', (e) => {
 		if (e.type === 'model_request_start' && typeof e.model === 'string') {
 			model = e.model;
 			contextLimit = resolveContextWindow(model) ?? 0;
 		}
 	});
 
-	cmd.on('model_request_end', e => {
+	cmd.on('model_request_end', (e) => {
 		if (e.type === 'model_request_end') {
-			const ev = e as {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
+			const ev = e as {
+				model?: string;
+				effort?: string;
+				usage?: { inputTokens?: number; outputTokens?: number };
+			};
 			if (typeof ev.model === 'string') {
 				model = ev.model;
 				contextLimit = resolveContextWindow(model) ?? 0;
@@ -211,15 +232,19 @@ export default function (cmd: ModApi): void {
 		}
 	});
 
-	cmd.on('session_titled', e => {
+	cmd.on('session_titled', (e) => {
 		if (e.type === 'session_titled' && typeof e.title === 'string') {
 			sessionName = e.title;
 			enqueueRender();
 		}
 	});
 
-	cmd.on('config_setting_changed', e => {
-		if (e.type === 'config_setting_changed' && e.setting === 'effort' && typeof e.value === 'string') {
+	cmd.on('config_setting_changed', (e) => {
+		if (
+			e.type === 'config_setting_changed' &&
+			e.setting === 'effort' &&
+			typeof e.value === 'string'
+		) {
 			effort = e.value;
 			enqueueRender();
 		}

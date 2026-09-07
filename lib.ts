@@ -234,6 +234,7 @@ export interface StatusSegments {
 	effort: string;
 	// null = unknown context window (model not in CONTEXT_WINDOWS)
 	cntx: number | null;
+	cntxRemaining: number | null;
 	usge: number | null;
 	wkly: number | null;
 	totl: number | null;
@@ -259,6 +260,7 @@ export function computeStatus(s: StatusState): StatusSegments {
 		model: sanitizeDisplay(s.model),
 		effort: sanitizeDisplay(s.effort),
 		cntx: ctx === null ? null : Math.round(ctx),
+		cntxRemaining: ctx === null ? null : 100 - Math.round(ctx),
 		usge: usge === null ? null : Math.round(usge),
 		wkly: wkly === null ? null : Math.round(wkly),
 		totl: totl === null ? null : Math.round(totl),

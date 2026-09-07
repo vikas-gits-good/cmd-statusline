@@ -1,14 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { CONTEXT_WINDOWS, resolveContextWindow, buildStatusLine, type StatusState } from '../lib';
 
-// The authoritative context-window map synced from the installed CLI.
-const windows: Record<string, number> = JSON.parse(
-	readFileSync(join(process.cwd(), 'e2e', 'context-windows.json'), 'utf8'),
-).windows;
-
-const modelIds = Object.keys(windows);
+// The context-window map is the authoritative source for the mod's own
+// rendering. The sync-generated e2e/context-windows.json is validated by the
+// E2E suite (which runs sync first); unit tests derive from lib.ts directly so
+// they never depend on a generated file.
+const modelIds = Object.keys(CONTEXT_WINDOWS);
 
 function baseState(overrides: Partial<StatusState> = {}): StatusState {
 	return {
@@ -25,19 +22,16 @@ function baseState(overrides: Partial<StatusState> = {}): StatusState {
 	};
 }
 
-describe('every model in the synced context-window map', () => {
-	it('CONTEXT_WINDOWS matches the synced map', () => {
-		expect(Object.keys(CONTEXT_WINDOWS).sort()).toEqual(modelIds.sort());
-	});
-
-	it.each(modelIds)('resolves a context window for %s', (id) => {
-		const w = resolveContextWindow(id);
-		expect(w).toBe(windows[id]);
-		expect(w).toBeGreaterThan(0);
+describe('every model in CONTEXT_WINDOWS', () => {
+	it('resolves a context window for each model id', () => {
+		for (const id of modelIds) {
+			expect(resolveContextWindow(id)).toBe(CONTEXT_WINDOWS[id]);
+			expect(resolveContextWindow(id)).toBeGreaterThan(0);
+		}
 	});
 
 	it.each(modelIds)('renders %s with a non-zero context', (id) => {
-		const limit = windows[id];
+		const limit = CONTEXT_WINDOWS[id];
 		const line = buildStatusLine(
 			baseState({ model: id, currentTokens: limit / 2, contextLimit: limit }),
 		);
@@ -45,7 +39,7 @@ describe('every model in the synced context-window map', () => {
 	});
 
 	it.each(modelIds)('renders %s with zero context tokens', (id) => {
-		const line = buildStatusLine(baseState({ model: id, contextLimit: windows[id] }));
+		const line = buildStatusLine(baseState({ model: id, contextLimit: CONTEXT_WINDOWS[id] }));
 		expect(line).toContain('cntx: \u001b[32m0%\u001b[0m');
 	});
 });

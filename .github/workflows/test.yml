@@ -24,12 +24,16 @@ jobs:
         run: npm run format:check
       - name: Unit tests + coverage
         run: npm run test:unit
+      - name: Install Command Code CLI (needed by sync scripts)
+        run: npm install -g command-code
       - name: Install Playwright browsers (headless shell only)
         run: npx playwright install --with-deps --only-shell chromium
       - name: E2E tests
         run: npm run test:e2e
 
   cross-platform:
+    needs: quality
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

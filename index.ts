@@ -266,7 +266,7 @@ export default function (cmd: ModApi): void {
 
 		const shortModel = shortModelName(model);
 		const modelText = shortModel ? `${shortModel}, ` : '';
-		const effortText = effort ? `${effort} ` : '';
+		const effortText = effort ? `${effort}, ` : '';
 
 		let right = `${modelText}${effortText}ctx: ${colorUsage(ctx)}`;
 		if (usage) {

@@ -290,9 +290,13 @@ export default function (cmd: ModApi): void {
 	});
 
 	cmd.on('model_request_end', e => {
-		if (e.type === 'model_request_end' && e.usage) {
-			const u = e.usage as {inputTokens?: number; outputTokens?: number};
-			currentTokens = (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
+		if (e.type === 'model_request_end') {
+			const ev = e as {model?: string; effort?: string; usage?: {inputTokens?: number; outputTokens?: number}};
+			if (typeof ev.model === 'string') model = ev.model;
+			if (typeof ev.effort === 'string' && ev.effort) effort = ev.effort;
+			if (ev.usage) {
+				currentTokens = (ev.usage.inputTokens ?? 0) + (ev.usage.outputTokens ?? 0);
+			}
 			void render();
 		}
 	});

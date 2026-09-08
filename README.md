@@ -15,11 +15,19 @@ A Command Code mod that renders a persistent status bar under the input panel:
 
 Percentages are color-coded by severity. Usage data comes from the Command Code API using the same auth the CLI uses (`~/.commandcode/auth.json`).
 
+## Narrow terminals
+
+When the line is too wide it does not end in an ellipsis. Fields are dropped from lowest priority (credits, then cycle/weekly/5-hour usage, then context/effort/model, then session/branch) down to just the project name. The bar also re-renders immediately when the terminal or pane is resized.
+
 ## Install
 
 ```bash
 cmd mods add vikas-gits-good/cmd-statusline -g
 ```
+
+## Configuration
+
+The status line layout is a template, customizable via the `statusline_format` mod flag. Available tokens include `{cwd}`, `{branchPrefix}`, `{sessionPrefix}`, `{separator}`, `{modelPrefix}`, `{effortPrefix}`, `{cntx}`, `{usgePrefix}`, `{wklyPrefix}`, `{totlPrefix}`, and `{crdtPrefix}`.
 
 ## Development
 
@@ -27,7 +35,10 @@ Prerequisites: Node.js 22+, `cmd` on PATH (the sync scripts read model/plan data
 
 ```bash
 npm ci                # NODE_ENV=development required (npm omits dev deps otherwise)
-npm run test:unit     # vitest (unit + pure logic)
+npm run typecheck     # tsc --noEmit
+npm run lint          # eslint
+npm run format:check  # prettier --check
+npm run test:unit     # vitest with coverage (95% thresholds)
 npm run test:e2e      # sync model/plan lists, build harness, run Playwright
 ```
 

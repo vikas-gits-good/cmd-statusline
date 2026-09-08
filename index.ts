@@ -196,8 +196,19 @@ export default function (cmd: ModApi): void {
 		}
 	}
 
+	// Extract the current session id from COMMANDCODE_SCRATCHPAD.
+	function currentSessionId(): string | null {
+		const scratch = process.env.COMMANDCODE_SCRATCHPAD;
+		if (!scratch) return null;
+		const parts = scratch.split(/[\\/]/).filter(Boolean);
+		const scratchIdx = parts.lastIndexOf('scratchpad');
+		return scratchIdx >= 1 ? parts[scratchIdx - 1] : null;
+	}
+
 	async function render(signal?: AbortSignal): Promise<void> {
 		const cwd = (cmd.cwd || '').split(/[\\/]/).filter(Boolean).pop() || cmd.cwd || '';
+
+		const files = await locateSessionFiles();
 
 		await renderStatus(
 			{
@@ -213,6 +224,8 @@ export default function (cmd: ModApi): void {
 				usage,
 				template,
 				maxWidth: process.stdout.columns,
+				sessionId: currentSessionId(),
+				transcriptPath: files?.transcriptPath,
 			},
 			{
 				exec: (args) => cmd.exec({ ...args, signal }),

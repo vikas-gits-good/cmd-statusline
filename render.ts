@@ -5,6 +5,8 @@ import {
 	DEFAULT_TEMPLATE,
 	normalizeBranch,
 	pickSessionName,
+	buildStatusInput,
+	type StatusInput,
 	type Usage,
 } from './lib';
 
@@ -23,6 +25,8 @@ export interface RenderInput {
 	usage: Usage | null;
 	template?: string;
 	maxWidth?: number;
+	sessionId?: string | null;
+	transcriptPath?: string;
 }
 
 export interface ExecResult {
@@ -47,8 +51,12 @@ export interface RenderDeps {
 //   - never throws (returns a placeholder on any internal failure)
 //   - never calls setStatus when the signal is already aborted
 //   - calls setStatus exactly once per invocation on success
-export async function renderStatus(input: RenderInput, deps: RenderDeps): Promise<void> {
-	if (deps.signal?.aborted) return;
+// Returns the rich StatusInput it built, or null when aborted.
+export async function renderStatus(
+	input: RenderInput,
+	deps: RenderDeps,
+): Promise<StatusInput | null> {
+	if (deps.signal?.aborted) return null;
 
 	try {
 		const gitCwd = input.gitCwd ?? input.cwd;
@@ -74,31 +82,35 @@ export async function renderStatus(input: RenderInput, deps: RenderDeps): Promis
 			// not a git repo — keep the passed-in branch/dirty
 		}
 
-		if (deps.signal?.aborted) return;
+		if (deps.signal?.aborted) return null;
 
 		const diskTitle = await deps.readTitle();
 		const resolvedSessionName = pickSessionName(diskTitle, input.sessionName);
 
-		const line = renderTemplate(
-			input.template ?? DEFAULT_TEMPLATE,
-			{
-				cwd: input.cwd,
-				branch,
-				dirty,
-				sessionName: resolvedSessionName,
-				model: input.model,
-				effort: input.effort,
-				currentTokens: input.currentTokens,
-				contextLimit: input.contextLimit,
-				usage: input.usage,
-			},
-			input.maxWidth,
-		);
+		const state = {
+			cwd: input.cwd,
+			branch,
+			dirty,
+			sessionName: resolvedSessionName,
+			model: input.model,
+			effort: input.effort,
+			currentTokens: input.currentTokens,
+			contextLimit: input.contextLimit,
+			usage: input.usage,
+		};
+
+		const line = renderTemplate(input.template ?? DEFAULT_TEMPLATE, state, input.maxWidth);
 
 		deps.setStatus(line);
+
+		return buildStatusInput(state, {
+			sessionId: input.sessionId,
+			transcriptPath: input.transcriptPath,
+		});
 	} catch {
 		// Any internal failure (bad usage shape, buildStatusLine edge case)
 		// degrades to a stable placeholder rather than crashing the mod.
 		deps.setStatus('--');
+		return null;
 	}
 }

@@ -291,7 +291,7 @@ export function computeStatus(s: StatusState): StatusSegments {
 		: null;
 	return {
 		cwd: sanitizeDisplay(s.cwd),
-		branch: s.branch,
+		branch: sanitizeDisplay(s.branch),
 		dirty: s.dirty ? 'dirty' : 'clean',
 		sessionName: sanitizeDisplay(s.sessionName),
 		model: sanitizeDisplay(s.model),
@@ -332,7 +332,7 @@ export interface StatusInput {
 }
 
 export interface StatusInputExtras {
-	sessionId?: string;
+	sessionId?: string | null;
 	transcriptPath?: string;
 }
 

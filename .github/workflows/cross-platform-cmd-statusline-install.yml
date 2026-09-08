@@ -1,4 +1,4 @@
-name: test
+name: cross-platform-cmd-statusline-install
 
 on:
   push:
@@ -44,8 +44,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Cache npm (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\npm-cache
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
       - name: Install Command Code CLI
-        run: npm install -g command-code
+        run: npm install -g command-code --no-audit --no-fund
       - name: Verify CLI
         run: cmd --version
       - name: Install the mod (user scope)

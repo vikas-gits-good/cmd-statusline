@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PLAN_CREDITS, colorCredits, colorUsage, cyclePct, type Usage } from './lib';
+import { PLAN_CREDITS, colorCredits, colorUsage, cyclePct, type Usage } from '../lib';
 
 // Comprehensive plan/usage/error edge-case coverage using mocked API-shaped data.
 

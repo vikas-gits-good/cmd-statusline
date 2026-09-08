@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStatusLine, type StatusState, type Usage } from './lib';
+import { buildStatusLine, type StatusState, type Usage } from '../lib';
 
 function baseState(overrides: Partial<StatusState> = {}): StatusState {
 	return {

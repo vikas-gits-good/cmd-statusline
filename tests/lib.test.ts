@@ -9,7 +9,7 @@ import {
 	shortModelName,
 	resolveContextWindow,
 	type Usage,
-} from './lib';
+} from '../lib';
 
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';

@@ -12,6 +12,7 @@
 	"files": [
 		"index.ts",
 		"lib.ts",
+		"render.ts",
 		"usage.ts",
 		"README.md",
 		"LICENSE",

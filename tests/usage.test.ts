@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { readAuthKey, fetchUsage, API_BASE, CLIENT_VERSION } from './usage';
+import { readAuthKey, fetchUsage, API_BASE, CLIENT_VERSION } from '../usage';
 
 function jsonRes(body: unknown, ok = true, status = 200): Response {
 	return {

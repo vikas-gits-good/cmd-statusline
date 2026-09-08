@@ -62,21 +62,3 @@ jobs:
         run: cmd mods list
       - name: Smoke-load the mod file directly
         run: cmd --mod ./index.ts --version
-
-  # Single aggregate status so branch protection can require one check instead
-  # of four flat rows. Matrix legs still show their individual results, but the
-  # PR sees a single "ci" status.
-  ci:
-    needs: cross-platform
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Verify all upstream jobs passed
-        run: |
-          if [ "${{ needs.quality.result }}" = "success" ] && [ "${{ needs.cross-platform.result }}" = "success" ]; then
-            echo "All jobs passed"
-            exit 0
-          else
-            echo "One or more jobs failed"
-            exit 1
-          fi

@@ -422,9 +422,10 @@ export function debounce<T extends (...args: never[]) => void>(
 // Pure render of the status line from state. Derives all numbers from
 // computeStatus so there is exactly one implementation of the math.
 //
-// maxWidth is optional. When set, fields are dropped from the right (lowest
-// priority) first, and any single field that is too long is ellipsized as a
-// whole ("…"), never partially cut to wrap onto a second line.
+// maxWidth is optional. When set, the DEFAULT template degrades by dropping
+// whole fields (metrics first, then model/effort/cntx, then the separator,
+// then session/branch) so it never ends with "…" unless the cwd basename
+// alone is too wide.
 export function buildStatusLine(s: StatusState, maxWidth?: number): string {
 	return renderTemplate(DEFAULT_TEMPLATE, s, maxWidth);
 }
@@ -469,14 +470,55 @@ function templateTokens(seg: StatusSegments, s: StatusState) {
 	};
 }
 
+// Width-aware rendering of the DEFAULT template. Degrades by dropping whole
+// fields from lowest priority (rightmost) to highest, so narrow panes show a
+// shorter line rather than a trailing ellipsis. Only the cwd basename is ever
+// ellipsized, and only when it alone exceeds the available width.
+function renderDefaultWithWidth(s: StatusState, maxWidth: number): string {
+	const seg = computeStatus(s);
+	const tokens = templateTokens(seg, s);
+	const dot = seg.dirty === 'dirty' ? `${ORANGE}●${RESET}` : `${GREEN}●${RESET}`;
+
+	const left: string[] = [tokens.cwd];
+	if (seg.branch) left.push(`${seg.branch} ${dot}`);
+	if (seg.sessionName) left.push(seg.sessionName);
+
+	const right: string[] = [];
+	if (tokens.model) right.push(tokens.model);
+	if (tokens.effort) right.push(tokens.effort);
+	right.push(`cntx: ${tokens.cntx}`);
+	if (seg.usge !== null) right.push(`usge: ${tokens.usge}`);
+	if (seg.wkly !== null) right.push(`wkly: ${tokens.wkly}`);
+	if (seg.totl !== null) right.push(`totl: ${tokens.totl}`);
+	if (seg.crdt !== null) right.push(`crdt: ${tokens.crdt}`);
+
+	const join = (xs: string[]): string => xs.join(', ');
+	const withRight = (r: string[]): string =>
+		r.length === 0 ? join(left) : `${join(left)}  ${DIM}│${RESET}  ${join(r)}`;
+
+	const candidates: string[] = [];
+	for (let i = right.length; i >= 0; i--) candidates.push(withRight(right.slice(0, i)));
+	for (let i = left.length - 1; i >= 1; i--) candidates.push(join(left.slice(0, i)));
+
+	for (const candidate of candidates) {
+		if (stripAnsi(candidate).length <= maxWidth) return candidate;
+	}
+
+	return ellipsize(tokens.cwd, maxWidth);
+}
+
 // Render a status line from a template string. Interpolates {token} in a
 // single regex pass (lookup-by-token, never re-scans substituted output) so a
 // user-controlled value containing "{model}" or "$&" can't be re-interpreted.
 //
-// When maxWidth is set, trailing "prefix" tokens are dropped from lowest
-// priority first (crdt → totl → wkly → usge → session → effort), matching the
-// original field-drop behavior; the line is ellipsized as a last resort.
+// The default template uses renderDefaultWithWidth for graceful field-drop;
+// custom templates fall back to the generic token-drop below and are
+// ellipsized only if they still don't fit.
 export function renderTemplate(template: string, s: StatusState, maxWidth?: number): string {
+	if (template === DEFAULT_TEMPLATE && maxWidth !== undefined) {
+		return renderDefaultWithWidth(s, maxWidth);
+	}
+
 	const seg = computeStatus(s);
 	const tokens = templateTokens(seg, s);
 

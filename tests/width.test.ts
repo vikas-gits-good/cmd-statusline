@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStatusLine, stripAnsi, type StatusState } from '../lib';
+import { buildStatusLine, stripAnsi, ellipsize, renderTemplate, type StatusState } from '../lib';
 
 function state(overrides: Partial<StatusState> = {}): StatusState {
 	return {
@@ -148,5 +148,40 @@ describe('whole-field integrity (no partial cuts)', () => {
 		const line = stripAnsi(buildStatusLine(s, 200));
 		expect(line).not.toContain('\n');
 		expect(line.length).toBeLessThanOrEqual(200);
+	});
+});
+
+describe('buildStatusLine narrow-width degradation (no ellipsis)', () => {
+	it('degrades to just the cwd instead of ellipsizing at a narrow width', () => {
+		const line = stripAnsi(buildStatusLine(state(), 10));
+		expect(line).toBe('my-project');
+		expect(line).not.toContain('…');
+		expect(line).not.toContain('│');
+	});
+
+	it('drops low-priority fields without introducing an ellipsis', () => {
+		const full = buildStatusLine(state({ sessionName: '' }));
+		const line = buildStatusLine(state({ sessionName: '' }), stripAnsi(full).length - 14);
+		expect(line).not.toContain('…');
+		expect(line).not.toContain('crdt:');
+		expect(line).toContain('totl:');
+	});
+
+	it('never leaves a trailing separator when the right group is dropped', () => {
+		const line = stripAnsi(buildStatusLine(state({ sessionName: '' }), 18));
+		expect(line).toBe('my-project, main ●');
+		expect(line).not.toContain('│');
+		expect(line).not.toContain('…');
+	});
+
+	it('ellipsize preserves leading ANSI codes while trimming to width', () => {
+		const out = ellipsize('\x1b[32mmy-project\x1b[0m', 5);
+		expect(stripAnsi(out)).toBe('my-p…');
+		expect(out).toContain('\x1b[32m');
+	});
+
+	it('drops droppable prefix tokens in a custom template when narrow', () => {
+		const out = renderTemplate('{cwd}{crdtPrefix}', state(), 12);
+		expect(stripAnsi(out)).toBe('my-project');
 	});
 });

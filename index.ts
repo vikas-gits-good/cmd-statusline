@@ -313,11 +313,19 @@ export default function (cmd: ModApi): void {
 		}
 	});
 
+	// Re-render immediately when the terminal/pane is resized so the statusline
+	// adapts to the new width instead of leaving stale text for Ink to truncate.
+	const onResize = () => enqueueRender();
+	process.stdout.on('resize', onResize);
+	process.stderr.on('resize', onResize);
+
 	cmd.hooks({
 		onSessionStart: () => {
 			void fullRefresh();
 		},
 		onSessionEnd: () => {
+			process.stdout.off('resize', onResize);
+			process.stderr.off('resize', onResize);
 			debouncedRender.cancel();
 			renderAbort?.abort();
 			cmd.ui.setStatus(null);
